@@ -1,0 +1,25 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The plugin targets the Node versions DSH itself supports.
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # The runtime peers (zod, @earendil-works/pi-ai) are provided by the DSH
+      # installation; they are devDependencies only so the test suite can run
+      # against a bare checkout.
+      - run: npm install --no-audit --no-fund
+      - run: npm test

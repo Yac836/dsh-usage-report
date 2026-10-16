@@ -1,0 +1,82 @@
+{
+  "name": "dsh-usage-report",
+  "version": "0.2.0",
+  "description": "Cross-session token usage and spend reporting for DeepSeek Harness: a /usage command, a JSON route, and a settings panel — built on the host's native session projections instead of re-scanning session logs.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    }
+  },
+  "files": [
+    "lib",
+    "test",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "verify": "node scripts/verify.mjs"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.87.1",
+    "zod": "^4.6.5"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "harness",
+    "usage",
+    "tokens",
+    "cost",
+    "spend",
+    "plugin",
+    "projection"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-commands": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-session-query": ">=0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "~3.18.4",
+    "@earendil-works/pi-ai": ">=0.85.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "author": "Yac836",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yac836/dsh-usage-report.git"
+  },
+  "homepage": "https://github.com/Yac836/dsh-usage-report#readme",
+  "bugs": {
+    "url": "https://github.com/Yac836/dsh-usage-report/issues"
+  }
+}
