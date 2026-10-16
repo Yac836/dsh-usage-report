@@ -210,3 +210,122 @@ test('force=1：绝不等待 —— 立刻返回旧快照（或 refreshing）并
   assert.equal(body.steps, 0)
   assert.ok(listed >= 2, '强制刷新确实启动了一次新的聚合')
 })
+
+const settleRefresh = () => new Promise((resolve) => setImmediate(resolve))
+const requestReport = (captured, query = '') =>
+  captured.route.fetch(new Request(`http://localhost/api/usage.report${query}`))
+
+test('/usage 每次等待本次聚合，同一区间的并发命令共享任务', async () => {
+  const { ctx, captured } = makeContext()
+  let release
+  const ready = new Promise((resolve) => { release = resolve })
+  let listed = 0
+  ctx.sessionQuery = { async listSessions() { listed += 1; await ready; return [] } }
+  apply(ctx, { warmup: false })
+
+  const first = captured.command.handler({ rawInput: '7' })
+  const second = captured.command.handler({ rawInput: '7' })
+  assert.equal(listed, 1)
+  release()
+  assert.equal((await first).kind, 'success')
+  assert.equal((await second).kind, 'success')
+  assert.equal((await captured.command.handler({ rawInput: '7' })).kind, 'success')
+  assert.equal(listed, 2, '已有新鲜快照也不能代替本次命令请求')
+})
+
+test('/usage 不用旧快照掩盖刷新失败，错误不回显宿主细节，重试可恢复', async () => {
+  const { ctx, captured } = makeContext()
+  let fail = false
+  ctx.sessionQuery = { async listSessions() { if (fail) throw new Error('synthetic host detail'); return [] } }
+  apply(ctx, { warmup: false })
+  assert.equal((await captured.command.handler({})).kind, 'success')
+  fail = true
+  const failed = await captured.command.handler({})
+  assert.equal(failed.kind, 'error')
+  assert.match(failed.text, /刷新失败/)
+  assert.doesNotMatch(failed.text, /synthetic/)
+  fail = false
+  assert.equal((await captured.command.handler({})).kind, 'success')
+})
+
+test('后台失败保留最后成功报告，停止循环刷新，force 重试后清除错误', async () => {
+  const { ctx, captured } = makeContext()
+  let fail = false
+  let listed = 0
+  ctx.sessionQuery = { async listSessions() {
+    listed += 1
+    if (fail) throw new Error('synthetic host detail')
+    return []
+  } }
+  apply(ctx, { warmup: false })
+  await requestReport(captured)
+  await settleRefresh()
+  const original = await (await requestReport(captured, '?poll=1')).json()
+  fail = true
+  assert.equal((await (await requestReport(captured, '?force=1')).json()).refreshing, true)
+  await settleRefresh()
+  const failed = await (await requestReport(captured, '?poll=1')).json()
+  assert.deepEqual(failed.total, original.total)
+  assert.equal(failed.asOf, original.asOf)
+  assert.equal(failed.refreshing, false)
+  assert.match(failed.refreshError, /刷新失败/)
+  assert.doesNotMatch(JSON.stringify(failed), /synthetic/)
+  await requestReport(captured)
+  assert.equal(listed, 2, '失败后普通请求不应无限重启后台任务')
+
+  fail = false
+  await requestReport(captured, '?force=1')
+  await settleRefresh()
+  const recovered = await (await requestReport(captured, '?poll=1')).json()
+  assert.equal(recovered.refreshError, undefined)
+  assert.equal(recovered.refreshing, false)
+  assert.equal(listed, 3)
+})
+
+test('冷启动失败返回 503，直到显式重试，不一直返回 refreshing', async () => {
+  const { ctx, captured } = makeContext()
+  let fail = true
+  let listed = 0
+  ctx.sessionQuery = { async listSessions() { listed += 1; if (fail) throw new Error('synthetic detail'); return [] } }
+  apply(ctx, { warmup: false })
+  await requestReport(captured, '?days=7')
+  await settleRefresh()
+  const failed = await requestReport(captured, '?days=7&poll=1')
+  assert.equal(failed.status, 503)
+  const body = await failed.json()
+  assert.equal(body.refreshing, false)
+  assert.match(body.error, /刷新失败/)
+  assert.equal(listed, 1)
+  fail = false
+  await requestReport(captured, '?days=7&force=1')
+  await settleRefresh()
+  assert.equal((await requestReport(captured, '?days=7&poll=1')).status, 200)
+  assert.equal(listed, 2)
+})
+
+test('ttlMs=0 的状态轮询不重复触发聚合，面板检查间隔有合理上下界', async () => {
+  for (const [ttlMs, expectedInterval] of [[0, 30_000], [60_000, 60_000], [1e15, 3_600_000]]) {
+    const { ctx, captured } = makeContext()
+    let listed = 0
+    ctx.sessionQuery = { async listSessions() { listed += 1; return [] } }
+    apply(ctx, { warmup: false, ttlMs })
+    await requestReport(captured)
+    await settleRefresh()
+    const ready = await (await requestReport(captured, '?poll=1')).json()
+    assert.equal(ready.refreshing, false)
+    assert.equal(ready.refreshAfterMs, expectedInterval)
+    await requestReport(captured, '?poll=1')
+    assert.equal(listed, 1)
+  }
+})
+
+test('JSON 明确提供 CNY 缺汇率时的回退提示标记', async () => {
+  const { ctx, captured } = makeContext()
+  ctx.sessionQuery = { async listSessions() { return [] } }
+  apply(ctx, { warmup: false, currency: 'CNY' })
+  await requestReport(captured)
+  await settleRefresh()
+  const ready = await (await requestReport(captured, '?poll=1')).json()
+  assert.equal(ready.money.currency, 'USD')
+  assert.equal(ready.money.fellBack, true)
+})

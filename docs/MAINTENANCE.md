@@ -33,7 +33,7 @@ Node 要求为 `>=20`，CI 覆盖 20、22、24。`package.json` 没有运行时 
 ## 配置与私密数据边界
 
 使用 [patch 样例](../examples/cordis.patch.example.yml) 合并一条插件配置。
-配置 schema 只接受 `currency`、`cnyPerUsd`、`warmup`、`warmupDelayMs`、`ttlMs`，
+配置 schema 声明 `currency`、`cnyPerUsd`、`warmup`、`warmupDelayMs`、`ttlMs`，
 本插件不接收密码、API Key、Cookie 或 Token。
 
 [`.env.example`](../.env.example) 仅说明可选的 `DSH_HOME`，**不会被插件自动加载**。
@@ -87,6 +87,22 @@ npm run verify -- --dsh "<DSH_HOME>/profiles/node_modules/@deepseek-ai/dsh"
 
 这不是端到端验收。最终还需在获准操作的宿主上确认面板加载、命令输出、路由访问权限、
 缓存持久化和重启后统计。当前 CI 只做 Node 版本矩阵的锁定安装、自检及单元测试，**不会部署**。
+
+## 费用口径与刷新验收
+
+- 面板和命令中的金额均为按当前安装的 pi-ai DeepSeek 目录计算的估算，不能当作实际账单。
+  目录升级会改变历史估算；未定价模型保留 Token 统计，未知费用不计入合计，不代表免费。
+- `/usage` 每次等待本次聚合，或共享同区间已经运行的任务。它仍复用会话缓存，
+  并不能补足宿主尚未写入或尚未恢复的事件。命令可能需要等待一次冷读取。
+- HTTP 普通请求沿用快照和后台刷新。面板等待结果时用 `poll=1`，避免已有快照
+  因 `ttlMs=0` 被反复重新计算。稳定状态的检查间隔按 `ttlMs` 限制在 30 秒至 1 小时，
+  只在页面可见时运行；重新可见时检查，卸载时停止请求、计时器和监听器。
+- 无旧报告的后台失败返回 503；有旧报告时保留其 `asOf`，返回 `refreshError` 和
+  `refreshing: false`。界面提示失败并停止自动重试，刷新/重试按钮使用 `force=1`。
+  用户可见异常采用固定文案，不回显宿主路径、原始异常或敏感上下文。
+- 在隔离测试宿主中验收首次加载、同区间并发请求、旧快照更新、冷/热失败与重试、
+  `ttlMs=0`、页面隐藏/恢复、切换日期和卸载；测试不能指向实际 DSH 数据目录。
+  合成测试通过不等于真实 DSH 已完成端到端验收。
 
 ## 部署与升级
 
