@@ -3,6 +3,13 @@
 一个 DSH 插件：**跨会话**汇总 token 用量与花费，按 provider 与 model 拆开，并通过三个出口呈现 ——
 `/usage` 斜杠命令、`GET /api/usage.report` JSON 路由、设置页的「用量」面板。
 
+[English](README.md) · [维护、部署与恢复](docs/MAINTENANCE.md)
+· [脱敏配置样例](examples/cordis.patch.example.yml)
+
+这是运行在 DSH 进程中的插件，没有独立启动命令或构建步骤。供应商鉴权由宿主负责，
+本插件不接收 API Key，也不会自动读取 `.env`；[`.env.example`](.env.example)
+只说明可选的 `DSH_HOME` 环境变量。
+
 ## 效果
 
 面板长这样 —— 它读宿主维护的会话投影，而不是重扫日志：
@@ -58,7 +65,10 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
   `~/.dsh/profiles/node_modules` 树，因此无需安装任何依赖。
 - 新增 `insert` 行**不像**修改已有条目的 `config` 那样被热应用，加完要重启 DSH。
 
-### 方式 B —— `dsh plugin add`
+### 方式 B —— 已核验来源的 npm 包
+
+仅在确认 npm 包的所有者、来源和版本后使用。GitHub 私有仓库不代表同名 npm 包归自己所有，
+也不能证明该包已发布；本私有 checkout 优先使用上面的路径安装流程。
 
 ```sh
 dsh plugin add dsh-usage-report
@@ -78,10 +88,11 @@ dsh plugin add dsh-usage-report
 | `@deepseek-ai/dsh-session-query` | `>=0.2.0-rc.2` | 是 |
 | `@deepseek-ai/dsh-client-ui-settings` | `>=0.2.0-rc.2` | 是 |
 | `@deepseek-ai/dsh-client-locale` | `>=0.2.0-rc.2` | 是 |
+| `@deepseek-ai/dsh-home-paths` | `>=0.2.0-rc.2` | 是 |
 | `@deepseek-ai/cordis` | `~4.0.4` | 否 —— 不在 `dsh` 命名空间内 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | 否 —— 不在 `dsh` 命名空间内 |
 
-四个 DSH peer 刻意用开放下界（`>=0.2.0-rc.2`）而不是钉死版本：这是本插件开发所依据的最老运行时，
+五个 DSH peer 刻意用开放下界（`>=0.2.0-rc.2`）而不是钉死版本：这是本插件开发所依据的最老运行时，
 任何更新的运行时仍然满足它。闸门只检查 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 命名空间内的名字，
 因此 `@deepseek-ai/cordis` 与 `@deepseek-ai/schemastery` 只是被声明、不会被检查。在 DSH workspace 内
 开发的贡献者也可以用 `workspace:^`、`workspace:~`、`workspace:*` 三种写法通过闸门 —— DSH 把它们
@@ -350,17 +361,21 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
 
 ## 开发
 
-`npm run verify` checks module syntax, the manifest, the client bundle id and the
-DSH compatibility gate (`scripts/verify.mjs`, standard library only).
+先按锁文件安装开发和测试依赖。测试使用假宿主和合成事件，不要求运行 DSH；
+接线测试会创建独立的临时 DSH home，不读取或裁剪用户真实缓存。
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run verify -- --version 0.2.0-rc.2
 npm test       # → node --test，来自 manifest 的 `test` 脚本
 node --test    # 等价，直接在 checkout 里跑
 ```
 
-需要 Node ≥ 20（声明在 `engines` 里）。不需要 DSH 运行时，也不需要构建。
+需要 Node ≥ 20（声明在 `engines` 里），无需构建。`verify` 检查模块语法、manifest、
+客户端 bundle id 和给定版本的 DSH peer 下界；无 `--version` 时尝试探测本机宿主，
+找不到则明确跳过闸门。它不能代替实际部署宿主上的端到端验收。
 
-测试共 **31 项**，专挑那些「错了也不会立刻报错」的地方：
+测试专挑那些「错了也不会立刻报错」的地方：
 
 - 无关事件必须返回同一引用；`headSeq` 每会话只记录一次；
 - 全部四种水位关系，包括会导致重复计费的继承前缀情形；
@@ -387,11 +402,24 @@ node --test    # 等价，直接在 checkout 里跑
 | `lib/currency.js` | host | 展示币种换算（仅展示层） |
 | `lib/render.js` | host | 命令输出的 Markdown 渲染 |
 | `lib/client.js` | client | 设置页面板 |
+| `test/`、`scripts/verify.mjs` | 开发 | 合成数据测试和插件自检 |
+| `examples/`、`.env.example` | 配置 | 脱敏 profile 片段和宿主环境变量说明 |
+| `docs/MAINTENANCE.md` | 维护 | 数据边界、部署、回滚、恢复和秘密检查流程 |
 
 浏览器半是**手写的零构建 bundle**，形态为 `window.__ModuleLoader__.load({ id, factory })` ——
 因为宿主原样服务该文件，没有东西会自动生成这层包装。工厂是懒执行的，模块体在首次 import 时才运行。
 它只从平台的静态模块表里 require `react`，其余全部自己实现，从而不依赖任何未经验证的组件 props 契约。
 这也是它看起来比原生面板朴素的原因。
+
+## 维护与恢复
+
+[维护手册](docs/MAINTENANCE.md) 说明依赖、宿主会话数据、可重建缓存、部署检查及恢复边界。
+真实 profile、供应商凭据、会话日志、备份和用量导出保存在源码目录外；`.gitignore`
+只防止误提交，不代表可以删除这些文件。`lib/client.js` 是手写源码，两张 PNG 是有引用的文档素材。
+GitHub Actions 只安装依赖、自检并测试，不执行部署。
+
+提交前扫描所有已获取 Git 历史及工作区，再复核暂存区并重新确认 GitHub 为 Private。
+发现真实凭据入历史、仓库不再私有，或需要凭据轮换、历史重写时立即停止并报告。
 
 ## 许可证
 

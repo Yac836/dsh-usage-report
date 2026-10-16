@@ -4,6 +4,14 @@ A DSH plugin that totals token usage and cost **across every session**, broken d
 provider and model, and exposes the result three ways: a `/usage` slash command, a
 `GET /api/usage.report` JSON route, and a **Usage** panel in Settings.
 
+[简体中文](README.zh-CN.md) · [Maintenance, deployment and recovery (中文)](docs/MAINTENANCE.md)
+· [Sanitized profile example](examples/cordis.patch.example.yml)
+
+This is an in-process DSH plugin, not a standalone server. It has no build step or
+separate start command. Provider authentication stays with the host; this plugin
+does not accept API keys or load `.env` files. [`.env.example`](.env.example) explains
+the optional `DSH_HOME` environment variable.
+
 ## Verification
 
 The panel, for reference — a settings section that reads the host's session
@@ -69,7 +77,11 @@ Notes on the path form:
 - Adding a new `insert` row is **not** hot-applied the way editing an existing row's `config`
   is. Restart DSH after adding it.
 
-### Option B — `dsh plugin add`
+### Option B — a verified published package
+
+Use this only after confirming the npm package's owner, source and version. A private
+GitHub checkout does not establish ownership or availability of the same name on npm;
+the path install above is the documented route for this private checkout.
 
 ```sh
 dsh plugin add dsh-usage-report
@@ -90,10 +102,11 @@ DSH version is precisely what makes a plugin "disappear". Keep these ranges perm
 | `@deepseek-ai/dsh-session-query` | `>=0.2.0-rc.2` | yes |
 | `@deepseek-ai/dsh-client-ui-settings` | `>=0.2.0-rc.2` | yes |
 | `@deepseek-ai/dsh-client-locale` | `>=0.2.0-rc.2` | yes |
+| `@deepseek-ai/dsh-home-paths` | `>=0.2.0-rc.2` | yes |
 | `@deepseek-ai/cordis` | `~4.0.4` | no — outside the `dsh` namespace |
 | `@deepseek-ai/schemastery` | `~3.18.4` | no — outside the `dsh` namespace |
 
-The four DSH peers use a deliberate open floor (`>=0.2.0-rc.2`) rather than an exact pin: that is
+The five DSH peers use a deliberate open floor (`>=0.2.0-rc.2`) rather than an exact pin: that is
 the oldest runtime this plugin has been developed against, and any newer runtime still satisfies
 it. Only names in the `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` namespace are gated, so
 `@deepseek-ai/cordis` and `@deepseek-ai/schemastery` are declared without being checked. For
@@ -407,17 +420,23 @@ Further invariants:
 
 ## Development
 
-`npm run verify` checks module syntax, the manifest, the client bundle id and the
-DSH compatibility gate (`scripts/verify.mjs`, standard library only).
+Install the locked development/test dependencies before running the suite. DSH
+services are mocked, so a running host is not needed. Wiring tests use an isolated
+temporary DSH home and do not read or prune the user's real cache.
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run verify -- --version 0.2.0-rc.2
 npm test       # → node --test, from the manifest's `test` script
 node --test    # equivalent, straight from a checkout
 ```
 
-Node ≥ 20 is required (declared in `engines`). No DSH runtime and no build step are needed.
+Node ≥ 20 is required (declared in `engines`). `verify` checks module syntax, the
+manifest, client bundle id and the stated DSH peer floor. Without `--version`, it
+tries to detect a local host and explicitly skips the gate when none is found.
+This does not replace testing against the actual deployment host.
 
-The suite — 31 tests — targets the things that fail silently rather than loudly:
+The suite targets the things that fail silently rather than loudly:
 
 - the same-reference contract for irrelevant events, and the one-shot `headSeq` record;
 - all four watermark relationships, including the inherited-prefix case that would double-bill;
@@ -444,6 +463,9 @@ The suite — 31 tests — targets the things that fail silently rather than lou
 | `lib/currency.js` | host | Display-currency conversion (presentation only) |
 | `lib/render.js` | host | Markdown rendering for the command output |
 | `lib/client.js` | client | Settings panel |
+| `test/`, `scripts/verify.mjs` | development | Synthetic-data tests and plugin self-check |
+| `examples/`, `.env.example` | configuration | Sanitized profile fragment and host environment reference |
+| `docs/MAINTENANCE.md` | operations | Data boundaries, deployment, rollback, recovery and secret-review procedure |
 
 The browser half is a **hand-written, zero-build bundle** in the
 `window.__ModuleLoader__.load({ id, factory })` form, because the host serves the file as-is and
@@ -451,6 +473,19 @@ nothing generates the wrapper. Its factory is lazy, so the module body runs on f
 requires only `react` from the platform's static module table; everything else is implemented
 locally so the panel cannot depend on an unverified component contract. That is also why it looks
 plainer than native panels.
+
+## Maintenance and recovery
+
+The [maintenance guide](docs/MAINTENANCE.md) describes the dependency model,
+host-owned session data, rebuildable caches, deployment checks and recovery limits.
+Keep actual profiles, provider credentials, session logs, backups and usage exports
+outside the checkout. `.gitignore` is a guard against accidental commits, not permission
+to delete files. The hand-written `lib/client.js` and referenced documentation PNGs are
+source assets. GitHub Actions only installs, verifies and tests; it does not deploy.
+
+Review all fetched Git history and the working tree for secrets, then inspect the staged
+changes and recheck GitHub visibility before committing and pushing. Stop if real secrets
+have entered history, privacy is lost, or credential rotation/history rewriting is needed.
 
 ## License
 

@@ -1,0 +1,13 @@
+# Sanitized fragment for <DSH_HOME>/profiles/web/cordis.patch.yml.
+# Merge this insert row into the existing patch; do not replace the whole file.
+# Relative paths resolve from the directory containing the patch.
+- insert:
+    - id: usage-report
+      name: ./plugins/dsh-usage-report/lib/index.js
+      config:
+        currency: USD
+        # For CNY, set currency: CNY and supply your own cnyPerUsd >= 0.01.
+        # cnyPerUsd: 7.20 # example only, not a current exchange rate
+        warmup: true
+        warmupDelayMs: 2000
+        ttlMs: 30000

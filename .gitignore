@@ -1,6 +1,42 @@
-# 依赖与构建产物
+# 依赖、可重建产物与 npm 打包输出
 node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+*.tgz
 *.log
+
+# 仅提交脱敏样例；真实配置和凭据保存在项目外
+.env
+.env.*
+!.env.example
+.npmrc
+*.local
+*.local.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials*.json
+secrets/
+
+# DSH 运行数据、配置、缓存与备份（忽略不等于允许删除）
+.dsh/
+profiles/
+storages/
+cache/
+backups/
+*.bak
+*.backup
+*.jsonl
+cordis.yml
+cordis.patch.yml
+fallback-cache.json
+fallback-cache.json.tmp
 
 # 编辑器 / 系统
 .DS_Store
@@ -10,4 +46,10 @@ Thumbs.db
 
 # 本地实验（不属于包内容）
 tmp/
-*.local.*
+temp/
+.tmp-*
+*.tmp
+*.swp
+*.swo
+gitleaks-report.*
+secret-scan-report.*

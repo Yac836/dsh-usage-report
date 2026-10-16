@@ -5,11 +5,29 @@
  * 现象都是"插件静默不工作"——没有报错、没有日志，只有功能缺失。
  * 因此用假 ctx 把它们钉死。
  */
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join, resolve } from 'node:path'
 
 import { Config, REPORT_ROUTE, apply, inject, name } from '../lib/index.js'
 import { USAGE_PROJECTION_KEY, USAGE_PROJECTION_VERSION } from '../lib/projection.js'
+
+// apply() resolves a persistent cache path even with a fake ctx. Never load or
+// prune the developer's real DSH cache while exercising the HTTP/command wiring.
+const temporaryRoot = resolve(tmpdir())
+const testDshHome = mkdtempSync(join(temporaryRoot, 'dsh-usage-report-test-'))
+const previousDshHome = process.env.DSH_HOME
+process.env.DSH_HOME = testDshHome
+after(() => {
+  if (previousDshHome === undefined) delete process.env.DSH_HOME
+  else process.env.DSH_HOME = previousDshHome
+  if (dirname(testDshHome) !== temporaryRoot || !basename(testDshHome).startsWith('dsh-usage-report-test-')) {
+    throw new Error('Refusing to remove an unexpected test directory')
+  }
+  rmSync(testDshHome, { recursive: true, force: true })
+})
 
 /** 假 ctx：记录所有注册动作。 */
 function makeContext({ withProjections = true, withConnection = true } = {}) {
