@@ -1,7 +1,14 @@
 # dsh-usage-report
 
-一个 DSH 插件：**跨会话**汇总 token 用量与花费，按 provider 与 model 拆开，并通过三个出口呈现 ——
+一个 DSH 插件：**跨会话**汇总 token 用量与估算费用，按 provider 与 model 拆开，并通过三个出口呈现 ——
 `/usage` 斜杠命令、`GET /api/usage.report` JSON 路由、设置页的「用量」面板。
+
+[English](README.md) · [维护、部署与恢复](docs/MAINTENANCE.md)
+· [脱敏配置样例](examples/cordis.patch.example.yml)
+
+这是运行在 DSH 进程中的插件，没有独立启动命令或构建步骤。供应商鉴权由宿主负责，
+本插件不接收 API Key，也不会自动读取 `.env`；[`.env.example`](.env.example)
+只说明可选的 `DSH_HOME` 环境变量。
 
 ## 效果
 
@@ -25,14 +32,17 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
   投影缓存读取（同样零日志 IO，重启后不必重扫）；只有投影读不到或不可信时才回退读日志。
 - **两条路径、同一个 fold**：投影路径与兜底路径复用同一个 fold 函数，因此结果逐位一致
   （有测试断言）。
-- **价格现算**：单价在调用时从已安装的 pi-ai 目录读取，本仓库里没有任何价格表。
+- **费用估算**：单价在调用时从已安装的 pi-ai 目录读取，本仓库里没有任何价格表。
 - **不内置汇率**：默认 USD；只有显式给出 `cnyPerUsd` 才会显示人民币。
 - **自然日窗口**：`/usage 7` 表示「最近 7 个自然日（含今天）」；面板还提供「今天」「近 30 天」，
   以及**任意起止日期**。
-- **绝不为冷扫描等待**：启动后台预热默认区间；请求立即返回最近一次快照并标注「数据截至」时间。
+- **面板不为冷扫描阻塞**：启动后台预热默认区间；HTTP 请求立即返回最近一次快照并标注「数据截至」时间。
 - **诚实呈现**：匹配不到价格的模型会被明确列出（绝不静默按 $0 计），读取失败的会话只做计数，
   不会被藏起来。
 - **零构建**：浏览器半是手写的 bundle，项目没有构建链。
+
+金额采用已安装目录中的 DeepSeek 官方价估算，不等于实际账单；不包含网关套餐、折扣或结算差异。
+未定价模型保留 Token 统计，但未知费用不计入合计，金额字段的零占位不代表免费。
 
 ## 安装
 
@@ -58,7 +68,27 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
   `~/.dsh/profiles/node_modules` 树，因此无需安装任何依赖。
 - 新增 `insert` 行**不像**修改已有条目的 `config` 那样被热应用，加完要重启 DSH。
 
-### 方式 B —— `dsh plugin add`
+### Windows：更新本机已安装的插件
+
+首次按上面的路径方式安装、并有 `.deployment.json` 版本和文件哈希记录后，在源码仓库中运行：
+
+```powershell
+pwsh -NoProfile -File .\scripts\sync-deploy.ps1
+```
+
+也可以双击根目录的 `update.cmd`。需要 Windows、PowerShell 7.2+、Node 20+、Git、npm 和已登录的
+GitHub CLI。脚本先确认仓库 Private，按当前分支的 origin 上游执行仅快进拉取，安装锁定的测试依赖、
+检查宿主兼容性并运行测试，然后备份及替换插件。运行前结束 DSH 正在执行的任务：默认会短暂重启
+唯一匹配的本机回环 Web 实例；已有浏览器登录继续使用宿主原来的持久凭据。
+
+脚本不会切换分支、丢弃本地修改、修改 profile 配置或更新 DSH 本身。安装目录有未知文件、
+本地改动或无法确认目标进程时停止。当前分支仍是 PR 分支时，更新的也是该分支；合并后要在源码目录
+自行切换到希望跟踪的主分支。[检查、跳过拉取与回滚说明](docs/MAINTENANCE.md#windows-一键同步脚本)。
+
+### 方式 B —— 已核验来源的 npm 包
+
+仅在确认 npm 包的所有者、来源和版本后使用。GitHub 私有仓库不代表同名 npm 包归自己所有，
+也不能证明该包已发布；本私有 checkout 优先使用上面的路径安装流程。
 
 ```sh
 dsh plugin add dsh-usage-report
@@ -78,10 +108,11 @@ dsh plugin add dsh-usage-report
 | `@deepseek-ai/dsh-session-query` | `>=0.2.0-rc.2` | 是 |
 | `@deepseek-ai/dsh-client-ui-settings` | `>=0.2.0-rc.2` | 是 |
 | `@deepseek-ai/dsh-client-locale` | `>=0.2.0-rc.2` | 是 |
+| `@deepseek-ai/dsh-home-paths` | `>=0.2.0-rc.2` | 是 |
 | `@deepseek-ai/cordis` | `~4.0.4` | 否 —— 不在 `dsh` 命名空间内 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | 否 —— 不在 `dsh` 命名空间内 |
 
-四个 DSH peer 刻意用开放下界（`>=0.2.0-rc.2`）而不是钉死版本：这是本插件开发所依据的最老运行时，
+五个 DSH peer 刻意用开放下界（`>=0.2.0-rc.2`）而不是钉死版本：这是本插件开发所依据的最老运行时，
 任何更新的运行时仍然满足它。闸门只检查 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 命名空间内的名字，
 因此 `@deepseek-ai/cordis` 与 `@deepseek-ai/schemastery` 只是被声明、不会被检查。在 DSH workspace 内
 开发的贡献者也可以用 `workspace:^`、`workspace:~`、`workspace:*` 三种写法通过闸门 —— DSH 把它们
@@ -126,7 +157,7 @@ dsh plugin add dsh-usage-report
 
 1. **Tab + 表格** —— 按供应商或按模型切换。计数与 token 用紧凑格式（`32.5B`、`343K`）；
    金额显示 2 位，悬浮给出 6 位精确值。
-2. **汇总卡片** —— 总花费、总调用、实际消耗 Tokens（新增输入 + 输出 + 缓存读 + 缓存写）、
+2. **汇总卡片** —— 估算总费用、总调用、实际消耗 Tokens（新增输入 + 输出 + 缓存读 + 缓存写）、
    **缓存命中率** = `缓存读 / (新增输入 + 缓存写 + 缓存读)`。每张卡自带分项行（美元原值、会话数、
    输入/输出、缓存读/写），四个原始桶无需点击即可见。
 3. **用量热力图** —— 每天一格，跨度按你的数据自适应（4–53 周），颜色越深用量越大；可在
@@ -149,7 +180,7 @@ GET /api/usage.report?days=7   # 最近 7 个自然日
 
 响应形如
 `{ range, money, total, providers, models, unpriced, sessions, unreadable, steps, currency, unit,
-scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排列，每个桶同时带 `cost`
+scan, series, asOf, refreshing, refreshError?, refreshAfterMs }`；`providers` 与 `models` 按估算费用降序排列，每个桶同时带 `cost`
 （展示币种）与 `costUsd`（未折算）。`range` 里按用法给出 `days` 或 `from`/`to`。
 
 `series` 是按天的明细（`[{ day, calls, input, output, cacheRead, cacheWrite, cost, costUsd }]`，
@@ -163,7 +194,13 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
 **路由绝不为冷扫描等待。** 还没有快照时它立刻返回 `{ refreshing: true }`（不给半个报告），面板会
 重试；已有快照则直接返回，并带 `asOf`（毫秒时间戳）与 `refreshing` 告知是否有更新的正在计算。
 加 **`force=1`** 可立刻启动一次重算 —— 返回的仍是当前快照并标记 `refreshing: true`，所以点击不会
-卡住。详见下面的「快照与预热」。
+卡住。等待后台结果时，面板使用 **`poll=1`** 查询进度，不对已有快照再次发起聚合，
+因此 `ttlMs=0` 时也能结束轮询；没有快照时仍可初始化一次统计。
+
+刷新失败时，有旧报告就保留它，响应带 `refreshError` 且 `refreshing: false`；
+没有报告时返回 503 和固定失败提示，不回显宿主异常细节，也不无限自动重试。
+使用 `force=1` 显式重试。正常报告还带 `refreshAfterMs`，供面板安排下一次常规检查。
+详见下面的「快照与预热」。
 
 ## 工作原理
 
@@ -250,7 +287,7 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
 很贵 —— `readSession` 会重放校验整个日志并逐事件克隆，实测**约 1.6 秒/会话**（开发机上 4 个变更
 会话 ⇒ 6.3 秒，而总共只有 13 个会话 / 13 MB）。
 
-所以插件用**快照**，并且绝不为冷扫描阻塞：
+Web 面板使用**快照**，命令则等待本次聚合结果：
 
 - 启动后（延迟 `warmupDelayMs`，用 `warmup: false` 可关闭）在后台算好默认区间，于是面板第一次
   打开就已经有数据；
@@ -258,10 +295,14 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
   `{ refreshing: true }`，面板每 1.5 秒重试一次；
 - 超过 `ttlMs` 的快照仍然立刻返回，同时在后台刷新（stale-while-revalidate）；同一区间的并发请求
   共用一次刷新；
-- 面板与命令都会打印"数据截至"时间，所以旧数字不会被误当成新数字。`/usage` 命令则会等待结果 ——
-  命令等得起。
+- `/usage` 即使已有新鲜快照也会发起本次聚合，或加入该区间已经进行的任务；
+  等待结果，失败时明确报错，不以旧报告冒充成功。会话级缓存仍用于避免重复扫描日志。
+- 面板得到稳定报告后，按 `ttlMs` 安排检查，间隔限制在 30 秒至 1 小时。
+  页面隐藏时暂停，重新可见时检查；后台任务执行中每 1.5 秒用 `poll=1` 查询。
+  卸载时清理计时器、监听器和请求。失败后保留同一区间的数据，等待手动重试。
 
-这个取舍是显式的、可配置的：**用新鲜度换延迟**，上界由 `ttlMs` 和后台读取耗时决定。
+`ttlMs` 控制 HTTP 请求时的缓存重新验证，不代表常驻后台任务或端到端实时性保证。
+检查间隔、读取耗时、页面可见性、失败状态和宿主 checkpoint 都会影响最终显示的数据。
 
 ## 配置
 
@@ -271,7 +312,7 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
 | `cnyPerUsd` | 数字 ≥ 0.01 | — | 1 USD 折合多少 CNY。仅在 `currency: CNY` 时读取。 |
 | `warmup` | 布尔 | `true` | 启动后在后台计算默认区间（全部历史），使面板第一次打开不必等冷扫描。 |
 | `warmupDelayMs` | 数字 ≥ 0 | `2000` | 预热延迟，避开启动最忙的那一段。 |
-| `ttlMs` | 数字 ≥ 0 | `30000` | 快照多久算"新鲜"。更旧的快照仍会立刻返回，并在后台刷新。 |
+| `ttlMs` | 数字 ≥ 0 | `30000` | HTTP 快照新鲜度；普通请求发现过期后后台刷新，进度轮询不重复验证已有快照。命令始终聚合。 |
 
 **代码不内置任何汇率。** 汇率是使用者的账务口径（结汇价、平台折算价各不相同），猜一个数字既不准也不该。
 配置 `currency: CNY` 但没给合法 `cnyPerUsd` 时，会如实回退为美元：命令会打印一行回退警告，JSON 里
@@ -301,8 +342,9 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
 | `deepseek/deepseek-flash` | `deepseekflash` | `deepseek-flash` | 归一化 |
 | `deepseek-v4-pro-202606` | `deepseekpro` | `deepseek-v4-pro` | 归一化 |
 
-解析不到价格的模型会被列进「未定价」—— 命令输出里与 JSON 的 `unpriced` 字段里都有 —— 并按 $0 计入。
-它绝不会被静默丢弃，因为丢弃会让总额被低估。
+解析不到价格的模型会被列进「未定价」，命令输出和 JSON 的 `unpriced` 字段都会提示。
+Token 用量仍计入统计，未知费用不计入估算合计（金额字段使用零占位）；这不代表免费，
+总额可能偏低，差额目前无法确定。
 
 ## 正确性要点
 
@@ -335,12 +377,12 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
   水位判据看不到这种情况，因为头部是完整的。
 - **安装插件之前就存在的会话，其投影可能永远不可信。** 它们可能被判为不完整（见水位判据），从而持续
   走兜底路径。
-- **面板可能显示略旧的数据。** 它返回最新快照而不是为冷扫描阻塞，所以数字最多可能旧 `ttlMs`
-  （默认 30 秒）加一次后台读取的时间。「数据截至」那行始终写明计算时刻；`/usage` 命令则是等待计算，
-  永远是最新的。
+- **面板会显示快照数据。** 页面可见性、检查间隔、读取时间与失败状态都会影响新鲜度，
+  应查看「数据截至」时间。`/usage` 等待本次聚合，但仍受宿主可用投影与 checkpoint 状态限制，
+  不能保证异常退出后的所有尾部事件都已进入报告。
 - **花费是按 DeepSeek 官方价折算的。** 第三方网关的实际计价可能不同（套餐、折扣、峰谷价）。这个数字是
   「官方价等值」，不等于你的账单金额。
-- **未定价模型会让花费被低估**，低估量恰好等于它们的用量；它们会被列出，好让这个差额可见。
+- **未定价模型可能使估算费用偏低**，未知金额无法由 Token 数直接推断；模型会明确列出，零占位不代表免费。
 - **host 半的用户可见文案是中文**：`/usage` 的输出、路由错误信息、JSON 的 `unit` 字段。只有 Web 面板
   做了中英双语。
 - **投影状态版本是磁盘契约的一部分。** 任何折叠语义的改动都必须抬升 `USAGE_PROJECTION_VERSION`，
@@ -350,17 +392,21 @@ scan, series, asOf, refreshing }`；`providers` 与 `models` 按花费降序排�
 
 ## 开发
 
-`npm run verify` checks module syntax, the manifest, the client bundle id and the
-DSH compatibility gate (`scripts/verify.mjs`, standard library only).
+先按锁文件安装开发和测试依赖。测试使用假宿主和合成事件，不要求运行 DSH；
+接线测试会创建独立的临时 DSH home，不读取或裁剪用户真实缓存。
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run verify -- --version 0.2.0-rc.2
 npm test       # → node --test，来自 manifest 的 `test` 脚本
 node --test    # 等价，直接在 checkout 里跑
 ```
 
-需要 Node ≥ 20（声明在 `engines` 里）。不需要 DSH 运行时，也不需要构建。
+需要 Node ≥ 20（声明在 `engines` 里），无需构建。`verify` 检查模块语法、manifest、
+客户端 bundle id 和给定版本的 DSH peer 下界；无 `--version` 时尝试探测本机宿主，
+找不到则明确跳过闸门。它不能代替实际部署宿主上的端到端验收。
 
-测试共 **31 项**，专挑那些「错了也不会立刻报错」的地方：
+测试专挑那些「错了也不会立刻报错」的地方：
 
 - 无关事件必须返回同一引用；`headSeq` 每会话只记录一次；
 - 全部四种水位关系，包括会导致重复计费的继承前缀情形；
@@ -387,11 +433,24 @@ node --test    # 等价，直接在 checkout 里跑
 | `lib/currency.js` | host | 展示币种换算（仅展示层） |
 | `lib/render.js` | host | 命令输出的 Markdown 渲染 |
 | `lib/client.js` | client | 设置页面板 |
+| `test/`、`scripts/verify.mjs` | 开发 | 合成数据测试和插件自检 |
+| `examples/`、`.env.example` | 配置 | 脱敏 profile 片段和宿主环境变量说明 |
+| `docs/MAINTENANCE.md` | 维护 | 数据边界、部署、回滚、恢复和秘密检查流程 |
 
 浏览器半是**手写的零构建 bundle**，形态为 `window.__ModuleLoader__.load({ id, factory })` ——
 因为宿主原样服务该文件，没有东西会自动生成这层包装。工厂是懒执行的，模块体在首次 import 时才运行。
 它只从平台的静态模块表里 require `react`，其余全部自己实现，从而不依赖任何未经验证的组件 props 契约。
 这也是它看起来比原生面板朴素的原因。
+
+## 维护与恢复
+
+[维护手册](docs/MAINTENANCE.md) 说明依赖、宿主会话数据、可重建缓存、部署检查及恢复边界。
+真实 profile、供应商凭据、会话日志、备份和用量导出保存在源码目录外；`.gitignore`
+只防止误提交，不代表可以删除这些文件。`lib/client.js` 是手写源码，两张 PNG 是有引用的文档素材。
+GitHub Actions 只安装依赖、自检并测试，不执行部署。
+
+提交前扫描所有已获取 Git 历史及工作区，再复核暂存区并重新确认 GitHub 为 Private。
+发现真实凭据入历史、仓库不再私有，或需要凭据轮换、历史重写时立即停止并报告。
 
 ## 许可证
 

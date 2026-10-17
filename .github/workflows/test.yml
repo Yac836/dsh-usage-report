@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,5 +24,17 @@ jobs:
       # The runtime peers (zod, @earendil-works/pi-ai) are provided by the DSH
       # installation; they are devDependencies only so the test suite can run
       # against a bare checkout.
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run verify -- --version 0.2.0-rc.2
       - run: npm test
+
+  windows-deploy:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test scripts/test/sync-deploy.test.mjs
+      - shell: pwsh
+        run: ./scripts/test/sync-deploy.Tests.ps1

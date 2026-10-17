@@ -310,21 +310,23 @@ test('parseWindow：三种形式与非法输入', () => {
 })
 
 test('自定义区间：按自然日过滤，含首尾两天', async () => {
-  const now = Date.now()
+  // Explicit date windows do not depend on the wall clock. Noon keeps the two
+  // recent fixture events in one local day, including runs just after midnight.
+  const now = new Date(2026, 9, 17, 12).getTime()
   const { ctx } = makeContext(scenario(now))
   const old = dayKeyOf(now - 40 * DAY)
-  const today = dayKeyOf(now)
+  const recentDay = dayKeyOf(now)
 
   const all = await aggregateUsage(ctx, {})
   const onlyOld = await aggregateUsage(ctx, { from: old, to: old })
-  const onlyToday = await aggregateUsage(ctx, { from: today, to: today })
+  const onlyRecent = await aggregateUsage(ctx, { from: recentDay, to: recentDay })
 
   assert.equal(onlyOld.steps, 1, '40 天前那一条')
   assert.equal(onlyOld.total.input, 500)
   assert.equal(onlyOld.from, old)
   assert.equal(onlyOld.to, old)
-  assert.ok(onlyToday.steps >= 1)
-  assert.ok(onlyOld.steps + onlyToday.steps <= all.steps, '自定义区间不能超出全部历史')
+  assert.equal(onlyRecent.steps, 2, '同一天的两条近期事件')
+  assert.equal(onlyOld.steps + onlyRecent.steps, all.steps, '两个日期区间应覆盖全部自有事件')
   assert.equal(all.steps, 3)
 })
 

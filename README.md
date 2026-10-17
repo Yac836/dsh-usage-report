@@ -1,8 +1,16 @@
 # dsh-usage-report
 
-A DSH plugin that totals token usage and cost **across every session**, broken down by
+A DSH plugin that totals token usage and estimated cost **across every session**, broken down by
 provider and model, and exposes the result three ways: a `/usage` slash command, a
 `GET /api/usage.report` JSON route, and a **Usage** panel in Settings.
+
+[简体中文](README.zh-CN.md) · [Maintenance, deployment and recovery (中文)](docs/MAINTENANCE.md)
+· [Sanitized profile example](examples/cordis.patch.example.yml)
+
+This is an in-process DSH plugin, not a standalone server. It has no build step or
+separate start command. Provider authentication stays with the host; this plugin
+does not accept API keys or load `.env` files. [`.env.example`](.env.example) explains
+the optional `DSH_HOME` environment variable.
 
 ## Verification
 
@@ -31,16 +39,20 @@ This plugin fills that gap.
   or untrusted.
 - **Two read paths, one fold** — the projection and the fallback scan share the same fold
   function, so they agree bit for bit (asserted by a test).
-- **Live pricing** — rates are read from the installed pi-ai catalog at call time; no price
+- **Catalog-based estimates** — rates are read from the installed pi-ai catalog at call time; no price
   table lives in this repository.
 - **No hardcoded exchange rate** — USD by default; CNY only if you supply `cnyPerUsd`.
 - **Calendar-day windows** — `/usage 7` means the last 7 calendar days, today included; the panel
   also offers *Today*, *Last 30 days* and an arbitrary **from/to date range**.
-- **Never blocks on a cold scan** — a background warm-up populates the default range at start-up,
+- **Responsive panel** — a background warm-up populates the default range at start-up,
   and a request serves the latest snapshot with an *as-of* timestamp instead of waiting.
 - **Honest output** — unpriced models are listed explicitly (never silently counted as $0),
   and unreadable sessions are counted rather than hidden.
 - **Zero build** — the browser half is a hand-written bundle; the project has no build chain.
+
+Costs are estimates using the installed catalog's DeepSeek rates, not invoices. Gateway
+plans and discounts are not included. Unpriced models keep their token counts but have
+no known cost included in the total; a zero placeholder does not mean they were free.
 
 ## Install
 
@@ -69,7 +81,30 @@ Notes on the path form:
 - Adding a new `insert` row is **not** hot-applied the way editing an existing row's `config`
   is. Restart DSH after adding it.
 
-### Option B — `dsh plugin add`
+### Windows: update an existing local installation
+
+After the path installation has a `.deployment.json` commit/file-hash record, run from the checkout:
+
+```powershell
+pwsh -NoProfile -File .\scripts\sync-deploy.ps1
+```
+
+Or double-click `update.cmd`. Requires Windows, PowerShell 7.2+, Node 20+, Git, npm and an authenticated
+GitHub CLI. It confirms Private visibility, fast-forwards the current origin tracking branch, installs
+locked test dependencies, runs checks/tests, backs up the installed plugin and replaces its files.
+Finish active DSH tasks first: the default mode briefly restarts the uniquely verified loopback Web
+instance. It preserves profile configuration, credentials and sessions; it does not update DSH itself.
+
+Local source edits, unknown/changed installed files and unrecognized hosts stop the update. It never
+switches branches or resets local changes: a PR checkout continues tracking that PR branch until you
+switch it yourself after merging. See the [maintenance guide](docs/MAINTENANCE.md#windows-一键同步脚本)
+for checking without deployment, deploying with DSH closed, and restoring a previous version.
+
+### Option B — a verified published package
+
+Use this only after confirming the npm package's owner, source and version. A private
+GitHub checkout does not establish ownership or availability of the same name on npm;
+the path install above is the documented route for this private checkout.
 
 ```sh
 dsh plugin add dsh-usage-report
@@ -90,10 +125,11 @@ DSH version is precisely what makes a plugin "disappear". Keep these ranges perm
 | `@deepseek-ai/dsh-session-query` | `>=0.2.0-rc.2` | yes |
 | `@deepseek-ai/dsh-client-ui-settings` | `>=0.2.0-rc.2` | yes |
 | `@deepseek-ai/dsh-client-locale` | `>=0.2.0-rc.2` | yes |
+| `@deepseek-ai/dsh-home-paths` | `>=0.2.0-rc.2` | yes |
 | `@deepseek-ai/cordis` | `~4.0.4` | no — outside the `dsh` namespace |
 | `@deepseek-ai/schemastery` | `~3.18.4` | no — outside the `dsh` namespace |
 
-The four DSH peers use a deliberate open floor (`>=0.2.0-rc.2`) rather than an exact pin: that is
+The five DSH peers use a deliberate open floor (`>=0.2.0-rc.2`) rather than an exact pin: that is
 the oldest runtime this plugin has been developed against, and any newer runtime still satisfies
 it. Only names in the `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` namespace are gated, so
 `@deepseek-ai/cordis` and `@deepseek-ai/schemastery` are declared without being checked. For
@@ -140,7 +176,7 @@ to the top because "which provider cost what" is what you check most often.
 
 1. **Tabs + table** — per-provider or per-model. Counts and tokens use compact formatting
    (`32.5B`, `343K`); costs show 2 decimals with the exact 6-decimal value on hover.
-2. **Summary cards** — total cost, requests, tokens consumed (input + output + cache read + cache
+2. **Summary cards** — estimated total cost, requests, tokens consumed (input + output + cache read + cache
    write) and **cache hit rate** = `cacheRead / (input + cacheWrite + cacheRead)`. Each card carries
    its own breakdown line (USD original, session count, input/output, cache read/write), so every
    raw bucket is visible without a click.
@@ -167,7 +203,7 @@ GET /api/usage.report?days=7   # the last 7 calendar days
 
 The response is
 `{ range, money, total, providers, models, unpriced, sessions, unreadable, steps, currency, unit,
-scan, series, asOf, refreshing }`; `providers` and `models` are sorted by cost, descending, and each
+scan, series, asOf, refreshing, refreshError?, refreshAfterMs }`; `providers` and `models` are sorted by cost, descending, and each
 bucket carries both `cost` (display currency) and `costUsd` (unconverted). `range` reports `days` or
 `from`/`to` depending on which form was used.
 
@@ -186,7 +222,15 @@ connection — without one the slash command still works.
 `{ refreshing: true }` immediately (no partial report), and the panel retries; once a snapshot
 exists it is served with `asOf` (epoch ms) and `refreshing` telling you whether a newer one is
 being computed. Add **`force=1`** to start a recompute right away — the response is still the
-current snapshot with `refreshing: true`, so a click never blocks. See *Snapshot and warm-up* below.
+current snapshot with `refreshing: true`, so a click never blocks. During that refresh the
+panel uses `poll=1` to check progress without revalidating an existing snapshot again,
+including when `ttlMs=0`. A missing snapshot can still be initialized by a poll.
+
+If refresh fails, a last successful report is kept with `refreshError` and
+`refreshing: false`; without a report, the route returns 503 with a fixed error message.
+Failures do not expose host exception details or trigger endless automatic retries.
+Use `force=1` to retry explicitly. Successful report responses include `refreshAfterMs`
+for the panel's next routine check. See *Snapshot and warm-up* below.
 
 ## How it works
 
@@ -280,7 +324,7 @@ they thrash, and every report degrades to O(all history) — measured at roughly
 11 sessions / 11.4 MB of logs on the development machine, and that figure is a lower bound because
 it excludes replay validation and per-event cloning.
 
-Actual cost is reported rather than guessed: the command output and the panel both print
+Actual aggregation work is observable: the command output and the panel both print
 `projected / scanned / reused / elapsedMs`.
 
 ### Snapshot and warm-up
@@ -290,7 +334,7 @@ that changed since the last run has to be read once. That read is expensive — 
 replays and validates the whole log and clones every event, measured at **~1.6 s per session**
 (4 changed sessions ⇒ 6.3 s on the development machine, against 13 sessions / 13 MB).
 
-Rather than make the panel wait, the plugin keeps **snapshots** and never blocks on a cold scan:
+The web panel uses **snapshots**, while commands wait for a newly computed result:
 
 - At start-up (after `warmupDelayMs`, disabled with `warmup: false`) it computes the default
   range in the background, so the first panel open already has data.
@@ -299,11 +343,17 @@ Rather than make the panel wait, the plugin keeps **snapshots** and never blocks
   `{ refreshing: true }` and the panel retries every 1.5 s.
 - A snapshot older than `ttlMs` is still served at once, and a refresh starts in the background
   (stale-while-revalidate). Concurrent requests for the same range share one refresh.
-- Both the panel and the command print the as-of time, so a stale number is never mistaken for a
-  fresh one. `/usage` waits for a result instead, because a command can afford to.
+- `/usage` starts a new aggregation even if a fresh snapshot exists, or joins the task already
+  running for that range. It waits for the result and reports failure instead of silently
+  returning an older success. Per-session caches still avoid unnecessary log scans.
+- After receiving a stable report, a visible panel checks again every `ttlMs`, clamped to
+  30 seconds through one hour. Hidden panels pause checks; becoming visible checks again.
+  Active refreshes are polled every 1.5 seconds with `poll=1`. Unmounting clears timers,
+  listeners and the request. Failures preserve same-range data and require a manual retry.
 
-The trade is explicit and configurable: **freshness for latency**, bounded by `ttlMs` and by how
-long the background read takes.
+`ttlMs` controls HTTP revalidation on demand, not an always-running background job or
+a guarantee of end-to-end freshness. The polling interval, read duration, visibility,
+failures and the host's own checkpoint state also affect the data shown.
 
 ## Configuration
 
@@ -313,7 +363,7 @@ long the background read takes.
 | `cnyPerUsd` | number ≥ 0.01 | — | CNY per 1 USD. Read only when `currency: CNY`. |
 | `warmup` | boolean | `true` | Compute the default range (all history) in the background after start-up, so the first panel open does not wait for a cold scan. |
 | `warmupDelayMs` | number ≥ 0 | `2000` | Delay before that warm-up runs, to stay out of the busiest part of start-up. |
-| `ttlMs` | number ≥ 0 | `30000` | How long a snapshot counts as fresh. Older snapshots are still served immediately, with a background refresh. |
+| `ttlMs` | number ≥ 0 | `30000` | HTTP snapshot freshness. A normal stale request starts a background refresh; progress polls do not revalidate an existing snapshot. Commands always aggregate. |
 
 No exchange rate is built in. An exchange rate is an accounting policy — settlement rate, platform
 rate, and so on — so guessing one would be both inaccurate and out of scope. Requesting
@@ -349,9 +399,10 @@ the key is left deliberately unmatched instead of guessed.
 | `deepseek/deepseek-flash` | `deepseekflash` | `deepseek-flash` | normalized |
 | `deepseek-v4-pro-202606` | `deepseekpro` | `deepseek-v4-pro` | normalized |
 
-A model that resolves to nothing is listed under **unpriced** — in the command output and in
-`unpriced` in the JSON — and contributes $0. It is never silently dropped, because dropping it
-would understate the total.
+A model that resolves to nothing is listed under **unpriced**, in the command output and
+`unpriced` in JSON. Its token counts remain included, but its unknown cost is excluded
+from the estimated total (numeric cost fields use zero as a placeholder). It is not free;
+the total may be understated by an unknown amount.
 
 ## Correctness notes
 
@@ -391,13 +442,14 @@ Further invariants:
   The watermark check cannot see this, because the head is intact.
 - **Sessions that predate the install may never be trusted.** Their projection can be judged
   incomplete by the watermark criterion and will keep using the fallback path.
-- **The panel can show slightly stale data.** It serves the newest snapshot rather than blocking on a
-  cold scan, so a number may be up to `ttlMs` (default 30 s) plus one background read old. The as-of
-  line always says when the data was computed; `/usage` waits instead and is always current.
+- **The panel displays snapshots.** Visibility, check intervals, read duration and failures affect
+  freshness; inspect the as-of time. `/usage` waits for its aggregation, but the available host
+  projections and checkpoints can still omit tail events after an abnormal exit.
 - **Cost is the official DeepSeek list price applied to your usage.** A third-party gateway may bill
   differently (plans, discounts, peak/off-peak pricing). The number is an official-price equivalent,
   not your invoice.
-- **Unpriced models understate cost** by exactly their usage; they are listed so the gap is visible.
+- **Unpriced models can understate the estimated cost by an unknown amount.** Their token usage
+  is retained and they are listed explicitly; zero cost fields do not establish free usage.
 - **The host half's user-facing strings are Chinese** — the `/usage` output, route error messages,
   and the JSON `unit` field. Only the Web panel is localized (Chinese and English).
 - **The projection state version is part of the on-disk contract.** Any change to fold semantics
@@ -407,17 +459,23 @@ Further invariants:
 
 ## Development
 
-`npm run verify` checks module syntax, the manifest, the client bundle id and the
-DSH compatibility gate (`scripts/verify.mjs`, standard library only).
+Install the locked development/test dependencies before running the suite. DSH
+services are mocked, so a running host is not needed. Wiring tests use an isolated
+temporary DSH home and do not read or prune the user's real cache.
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run verify -- --version 0.2.0-rc.2
 npm test       # → node --test, from the manifest's `test` script
 node --test    # equivalent, straight from a checkout
 ```
 
-Node ≥ 20 is required (declared in `engines`). No DSH runtime and no build step are needed.
+Node ≥ 20 is required (declared in `engines`). `verify` checks module syntax, the
+manifest, client bundle id and the stated DSH peer floor. Without `--version`, it
+tries to detect a local host and explicitly skips the gate when none is found.
+This does not replace testing against the actual deployment host.
 
-The suite — 31 tests — targets the things that fail silently rather than loudly:
+The suite targets the things that fail silently rather than loudly:
 
 - the same-reference contract for irrelevant events, and the one-shot `headSeq` record;
 - all four watermark relationships, including the inherited-prefix case that would double-bill;
@@ -444,6 +502,9 @@ The suite — 31 tests — targets the things that fail silently rather than lou
 | `lib/currency.js` | host | Display-currency conversion (presentation only) |
 | `lib/render.js` | host | Markdown rendering for the command output |
 | `lib/client.js` | client | Settings panel |
+| `test/`, `scripts/verify.mjs` | development | Synthetic-data tests and plugin self-check |
+| `examples/`, `.env.example` | configuration | Sanitized profile fragment and host environment reference |
+| `docs/MAINTENANCE.md` | operations | Data boundaries, deployment, rollback, recovery and secret-review procedure |
 
 The browser half is a **hand-written, zero-build bundle** in the
 `window.__ModuleLoader__.load({ id, factory })` form, because the host serves the file as-is and
@@ -451,6 +512,19 @@ nothing generates the wrapper. Its factory is lazy, so the module body runs on f
 requires only `react` from the platform's static module table; everything else is implemented
 locally so the panel cannot depend on an unverified component contract. That is also why it looks
 plainer than native panels.
+
+## Maintenance and recovery
+
+The [maintenance guide](docs/MAINTENANCE.md) describes the dependency model,
+host-owned session data, rebuildable caches, deployment checks and recovery limits.
+Keep actual profiles, provider credentials, session logs, backups and usage exports
+outside the checkout. `.gitignore` is a guard against accidental commits, not permission
+to delete files. The hand-written `lib/client.js` and referenced documentation PNGs are
+source assets. GitHub Actions only installs, verifies and tests; it does not deploy.
+
+Review all fetched Git history and the working tree for secrets, then inspect the staged
+changes and recheck GitHub visibility before committing and pushing. Stop if real secrets
+have entered history, privacy is lost, or credential rotation/history rewriting is needed.
 
 ## License
 
