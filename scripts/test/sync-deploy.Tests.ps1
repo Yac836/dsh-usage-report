@@ -100,3 +100,7 @@ try {
     if (-not $taskResolved.StartsWith($taskAllowed, [StringComparison]::OrdinalIgnoreCase) -or (Split-Path $taskResolved -Leaf) -notmatch '^dsh-ps-test-[a-f0-9]{32}$') { throw 'Unsafe test cleanup path.' }
     Remove-Item -LiteralPath $taskResolved -Recurse -Force
 }
+
+# GitHub's pwsh wrapper propagates LASTEXITCODE from the intentional failed
+# native-command fixture unless successful test completion is explicit.
+exit 0
