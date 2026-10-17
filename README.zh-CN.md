@@ -68,6 +68,23 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
   `~/.dsh/profiles/node_modules` 树，因此无需安装任何依赖。
 - 新增 `insert` 行**不像**修改已有条目的 `config` 那样被热应用，加完要重启 DSH。
 
+### Windows：更新本机已安装的插件
+
+首次按上面的路径方式安装、并有 `.deployment.json` 版本和文件哈希记录后，在源码仓库中运行：
+
+```powershell
+pwsh -NoProfile -File .\scripts\sync-deploy.ps1
+```
+
+也可以双击根目录的 `update.cmd`。需要 Windows、PowerShell 7.2+、Node 20+、Git、npm 和已登录的
+GitHub CLI。脚本先确认仓库 Private，按当前分支的 origin 上游执行仅快进拉取，安装锁定的测试依赖、
+检查宿主兼容性并运行测试，然后备份及替换插件。运行前结束 DSH 正在执行的任务：默认会短暂重启
+唯一匹配的本机回环 Web 实例；已有浏览器登录继续使用宿主原来的持久凭据。
+
+脚本不会切换分支、丢弃本地修改、修改 profile 配置或更新 DSH 本身。安装目录有未知文件、
+本地改动或无法确认目标进程时停止。当前分支仍是 PR 分支时，更新的也是该分支；合并后要在源码目录
+自行切换到希望跟踪的主分支。[检查、跳过拉取与回滚说明](docs/MAINTENANCE.md#windows-一键同步脚本)。
+
 ### 方式 B —— 已核验来源的 npm 包
 
 仅在确认 npm 包的所有者、来源和版本后使用。GitHub 私有仓库不代表同名 npm 包归自己所有，

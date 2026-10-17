@@ -81,6 +81,25 @@ Notes on the path form:
 - Adding a new `insert` row is **not** hot-applied the way editing an existing row's `config`
   is. Restart DSH after adding it.
 
+### Windows: update an existing local installation
+
+After the path installation has a `.deployment.json` commit/file-hash record, run from the checkout:
+
+```powershell
+pwsh -NoProfile -File .\scripts\sync-deploy.ps1
+```
+
+Or double-click `update.cmd`. Requires Windows, PowerShell 7.2+, Node 20+, Git, npm and an authenticated
+GitHub CLI. It confirms Private visibility, fast-forwards the current origin tracking branch, installs
+locked test dependencies, runs checks/tests, backs up the installed plugin and replaces its files.
+Finish active DSH tasks first: the default mode briefly restarts the uniquely verified loopback Web
+instance. It preserves profile configuration, credentials and sessions; it does not update DSH itself.
+
+Local source edits, unknown/changed installed files and unrecognized hosts stop the update. It never
+switches branches or resets local changes: a PR checkout continues tracking that PR branch until you
+switch it yourself after merging. See the [maintenance guide](docs/MAINTENANCE.md#windows-一键同步脚本)
+for checking without deployment, deploying with DSH closed, and restoring a previous version.
+
 ### Option B — a verified published package
 
 Use this only after confirming the npm package's owner, source and version. A private
