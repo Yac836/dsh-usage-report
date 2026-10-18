@@ -156,7 +156,7 @@ try {
     $taskTop = Invoke-Quiet $taskGit @('rev-parse', '--show-toplevel') 'This is not a Git checkout.'
     if ([IO.Path]::GetFullPath($taskTop) -ne [IO.Path]::GetFullPath($taskRoot)) { Stop-Deployment 'Script must run from its own checkout.' }
     $taskRemote = Invoke-Quiet $taskGit @('remote', 'get-url', 'origin') 'Origin was not found.'
-    if ($taskRemote -notmatch '^(https://github\.com/|git@github\.com:)Yac836/dsh-usage-report(?:\.git)?$') { Stop-Deployment 'Origin is not the expected credential-free GitHub repository URL.' }
+    if ($taskRemote -notmatch '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)Yac836/dsh-usage-report(?:\.git)?$') { Stop-Deployment 'Origin is not the expected credential-free GitHub repository URL.' }
     if (-not $Rollback) {
         $taskGh = (Get-Command gh -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
         $taskPrivate = Invoke-Quiet $taskGh @('repo', 'view', 'Yac836/dsh-usage-report', '--json', 'isPrivate', '--jq', '.isPrivate') 'Cannot confirm GitHub visibility. Check gh authentication yourself.'
