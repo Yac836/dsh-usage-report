@@ -89,16 +89,13 @@ GitHub CLI。脚本按当前分支的 origin 上游执行仅快进拉取，安�
 本地改动或无法确认目标进程时停止。当前分支仍是 PR 分支时，更新的也是该分支；合并后要在源码目录
 自行切换到希望跟踪的主分支。[检查、跳过拉取与回滚说明](docs/MAINTENANCE.md#windows-一键同步脚本)。
 
-### 方式 B —— 已核验来源的 npm 包
+### 方式 B —— npm（暂不可用）
 
-仅在确认 npm 包的所有者、来源和版本后使用。GitHub 私有仓库不代表同名 npm 包归自己所有，
-也不能证明该包已发布；本仓库优先使用上面的路径安装流程。
+本项目**没有发布到 npm**。`dsh-usage-report` 这个名字在 npm 上由无关的第三方注册，
+执行 `dsh plugin add dsh-usage-report` 会装到别人的代码上，**请勿使用**。
 
-```sh
-dsh plugin add dsh-usage-report
-```
-
-这条路径需要机器上有 `pnpm`。
+在正式发布之前，请按方式 A、或用 `node scripts/install.mjs` 从本仓库安装。
+将来若发布，本节会写明准确的包名，并说明该路线需要机器上有 `pnpm`。
 
 ### 兼容性闸门
 

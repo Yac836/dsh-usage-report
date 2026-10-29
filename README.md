@@ -104,17 +104,13 @@ switches branches or resets local changes: a PR checkout continues tracking that
 switch it yourself after merging. See the [maintenance guide](docs/MAINTENANCE.md#windows-一键同步脚本)
 for checking without deployment, deploying with DSH closed, and restoring a previous version.
 
-### Option B — a verified published package
+### Option B — npm (not available)
 
-Use this only after confirming the npm package's owner, source and version. A scoped or differently named
-GitHub checkout does not establish ownership or availability of the same name on npm;
-the path install above is the documented route for this checkout.
+This project is **not published to npm**. The name `dsh-usage-report` is registered on npm by an
+unrelated owner, so `dsh plugin add dsh-usage-report` would install someone else's code. Do not use it.
 
-```sh
-dsh plugin add dsh-usage-report
-```
-
-This route requires `pnpm` on the machine.
+Install from this repository instead (Option A, or `node scripts/install.mjs`). If a package is ever
+published, this section will name it exactly and say that the route needs `pnpm` on the machine.
 
 ### Compatibility gate
 
