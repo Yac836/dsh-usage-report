@@ -59,7 +59,8 @@ no known cost included in the total; a zero placeholder does not mean they were 
 ### Option A — path insert (no pnpm needed) · recommended
 
 With this repository cloned, `node scripts/install.mjs` performs that copy for you, records the
-installed commit and writes the manifest `update.cmd` expects. Add `--check` for a dry run.
+installed commit and writes the manifest `update.cmd` expects. Add `--check` for a dry run,
+or `--help` for usage. Unknown/repeated options and missing values are rejected before any writes.
 
 
 1. Place the plugin directory inside the profile, e.g.
@@ -93,8 +94,8 @@ After the path installation has a `.deployment.json` commit/file-hash record, ru
 pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 ```
 
-Or double-click `update.cmd`. Requires Windows, PowerShell 7.2+, Node 20+, Git, npm and an authenticated
-GitHub CLI. It fast-forwards the current origin tracking branch, installs
+Or double-click `update.cmd`. Requires Windows, PowerShell 7.2+, Node 20+, Git and npm.
+GitHub CLI and GitHub API authentication are not required. It fast-forwards the current origin tracking branch, installs
 locked test dependencies, runs checks/tests, backs up the installed plugin and replaces its files.
 Finish active DSH tasks first: the default mode briefly restarts the uniquely verified loopback Web
 instance. It preserves profile configuration, credentials and sessions; it does not update DSH itself.
@@ -523,8 +524,11 @@ to delete files. The hand-written `lib/client.js` and referenced documentation P
 source assets. GitHub Actions only installs, verifies and tests; it does not deploy.
 
 Review all fetched Git history and the working tree for secrets, then inspect the staged
-changes and recheck GitHub visibility before committing and pushing. Stop if real secrets
-have entered history, privacy is lost, or credential rotation/history rewriting is needed.
+changes and confirm that GitHub visibility matches the intended public release before committing
+and pushing. Stop if real secrets have entered history, visibility changes unexpectedly, or
+credential rotation/history rewriting is needed. Removing a file or replacing a screenshot in
+the current tree does not remove older versions or commit author identities from Git history.
+Review their disclosure separately; any history rewrite needs the repository owner's approval.
 
 ## License
 

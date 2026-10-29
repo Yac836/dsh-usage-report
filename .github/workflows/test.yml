@@ -35,6 +35,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test scripts/test/sync-deploy.test.mjs
+      - run: node --test scripts/test/sync-deploy.test.mjs scripts/test/install.test.mjs
       - shell: pwsh
         run: ./scripts/test/sync-deploy.Tests.ps1
