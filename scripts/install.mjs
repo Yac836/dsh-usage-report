@@ -25,21 +25,45 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSy
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseArgs } from 'node:util'
 
 import { pluginFiles } from './sync-deploy.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const argv = process.argv.slice(2)
-const flag = (name) => {
-  const at = argv.indexOf(name)
-  return at === -1 ? undefined : argv[at + 1]
-}
-const check = argv.includes('--check')
-
 const fail = (message) => {
   console.error(`install: ${message}`)
   process.exit(1)
 }
+
+// Validate the entire command before inspecting or writing any runtime paths.
+// Do not echo parser errors: arguments can contain private paths or values.
+let options
+try {
+  const parsed = parseArgs({
+    options: {
+      dsh: { type: 'string' }, profile: { type: 'string' },
+      check: { type: 'boolean' }, help: { type: 'boolean' },
+    },
+    strict: true, allowPositionals: false, tokens: true,
+  })
+  const seen = new Set()
+  for (const token of parsed.tokens) {
+    if (token.kind !== 'option' || seen.has(token.name)) throw new Error('invalid option')
+    seen.add(token.name)
+    if (typeof token.value === 'string' && (!token.value.trim() || token.value.startsWith('--'))) {
+      throw new Error('missing option value')
+    }
+  }
+  options = parsed.values
+} catch {
+  fail('invalid arguments; use --help. No files were written.')
+}
+if (options.help) {
+  console.log('Usage: node scripts/install.mjs [--dsh <home>] [--profile <name>] [--check] [--help]')
+  console.log('--check validates installation without writing files. Unknown or repeated options are rejected.')
+  process.exit(0)
+}
+const check = options.check === true
 
 /** Reject symlinks anywhere in the chain, so a "path" cannot hide behind a link. */
 function plain(path) {
@@ -61,8 +85,8 @@ const inside = (parent, child) => {
 const git = (args) => execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex')
 
-const dshHome = plain(flag('--dsh') ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'))
-const profile = flag('--profile') ?? 'web'
+const dshHome = plain(options.dsh ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'))
+const profile = options.profile ?? 'web'
 if (!/^[a-zA-Z0-9_-]+$/.test(profile)) fail('invalid --profile')
 if (!existsSync(dshHome)) fail(`DSH home not found: ${dshHome} (pass --dsh <dir>)`)
 

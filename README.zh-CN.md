@@ -49,7 +49,8 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
 ### 方式 A —— 路径 insert（不需要 pnpm）· 推荐
 
 仓库已经 clone 下来时，`node scripts/install.mjs` 会替你完成这次复制，并记录安装的 commit
-与清单，之后即可用 `update.cmd` 更新。加 `--check` 只做干跑。
+与清单，之后即可用 `update.cmd` 更新。加 `--check` 只做干跑，`--help` 查看用法。
+未知或重复参数、缺少参数值都会在写入文件前报错。
 
 
 1. 把插件目录放进 profile 内，例如 `~/.dsh/profiles/web/plugins/dsh-usage-report/`。
@@ -80,8 +81,8 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
 pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 ```
 
-也可以双击根目录的 `update.cmd`。需要 Windows、PowerShell 7.2+、Node 20+、Git、npm 和已登录的
-GitHub CLI。脚本按当前分支的 origin 上游执行仅快进拉取，安装锁定的测试依赖、
+也可以双击根目录的 `update.cmd`。需要 Windows、PowerShell 7.2+、Node 20+、Git 和 npm，
+不要求安装或登录 GitHub CLI。脚本按当前分支的 origin 上游执行仅快进拉取，安装锁定的测试依赖、
 检查宿主兼容性并运行测试，然后备份及替换插件。运行前结束 DSH 正在执行的任务：默认会短暂重启
 唯一匹配的本机回环 Web 实例；已有浏览器登录继续使用宿主原来的持久凭据。
 
@@ -450,8 +451,10 @@ node --test    # 等价，直接在 checkout 里跑
 只防止误提交，不代表可以删除这些文件。`lib/client.js` 是手写源码，两张 PNG 是有引用的文档素材。
 GitHub Actions 只安装依赖、自检并测试，不执行部署。
 
-提交前扫描所有已获取 Git 历史及工作区，再复核暂存区并确认 GitHub 可见性。
-发现真实凭据入历史、仓库不再私有，或需要凭据轮换、历史重写时立即停止并报告。
+提交前扫描所有已获取 Git 历史及工作区，再复核暂存区并确认 GitHub 可见性符合公开发布意图。
+发现真实凭据入历史、可见性出现非预期变化，或需要凭据轮换、历史重写时立即停止并报告。
+删除当前文件或替换截图不会清除历史版本及提交者身份信息；应单独复核是否愿意公开，
+任何历史重写均需仓库所有者明确批准。
 
 ## 许可证
 

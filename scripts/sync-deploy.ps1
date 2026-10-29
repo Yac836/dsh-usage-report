@@ -158,9 +158,8 @@ try {
     $taskRemote = Invoke-Quiet $taskGit @('remote', 'get-url', 'origin') 'Origin was not found.'
     if ($taskRemote -notmatch '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)Yac836/dsh-usage-report(?:\.git)?$') { Stop-Deployment 'Origin is not the expected credential-free GitHub repository URL.' }
     if (-not $Rollback) {
-        $taskGh = (Get-Command gh -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-        $taskPrivate = Invoke-Quiet $taskGh @('repo', 'view', 'Yac836/dsh-usage-report', '--json', 'isPrivate', '--jq', '.isPrivate') 'Cannot confirm GitHub visibility. Check gh authentication yourself.'
-        if ($taskPrivate -ne 'true') { Write-Warning 'Repository is public. Visibility is informational; continuing with the guarded sync.' }
+        # This repository is intentionally public. Git handles access during pull;
+        # deployment does not need GitHub CLI, an API token, or a visibility query.
         Assert-CleanRepo
     }
     foreach ($taskForbiddenRoot in @($taskRoot, $DshHome)) {
@@ -269,7 +268,7 @@ try {
         } catch { Write-Host 'Automatic recovery could not be confirmed. Preserve the backup and inspect DSH locally; no unknown process was stopped.' }
     }
     if ($taskBackup) { Write-Host "Recovery record: $(Join-Path $taskBackup 'deployment.json')" }
-    Write-Host 'Check repository cleanliness/private visibility, gh access, tests, installed file hashes, and the exact local host. No raw diagnostics were written.'
+    Write-Host 'Check repository cleanliness, Git access, tests, installed file hashes, and the exact local host. No raw diagnostics were written.'
     exit 1
 } finally {
     Set-Location -LiteralPath $taskOriginalLocation
