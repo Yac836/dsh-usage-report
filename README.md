@@ -90,7 +90,7 @@ pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 ```
 
 Or double-click `update.cmd`. Requires Windows, PowerShell 7.2+, Node 20+, Git, npm and an authenticated
-GitHub CLI. It confirms Private visibility, fast-forwards the current origin tracking branch, installs
+GitHub CLI. It fast-forwards the current origin tracking branch, installs
 locked test dependencies, runs checks/tests, backs up the installed plugin and replaces its files.
 Finish active DSH tasks first: the default mode briefly restarts the uniquely verified loopback Web
 instance. It preserves profile configuration, credentials and sessions; it does not update DSH itself.
@@ -102,9 +102,9 @@ for checking without deployment, deploying with DSH closed, and restoring a prev
 
 ### Option B — a verified published package
 
-Use this only after confirming the npm package's owner, source and version. A private
+Use this only after confirming the npm package's owner, source and version. A scoped or differently named
 GitHub checkout does not establish ownership or availability of the same name on npm;
-the path install above is the documented route for this private checkout.
+the path install above is the documented route for this checkout.
 
 ```sh
 dsh plugin add dsh-usage-report

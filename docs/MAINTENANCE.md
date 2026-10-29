@@ -137,7 +137,7 @@ pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 
 要求 Windows、PowerShell 7.2+、Node 20+、Git、npm、已登录且有仓库读取权限的 GitHub CLI。
 本机代码回滚不联网查询 GitHub，也不要求源码工作区干净，以便断网或开发途中仍可恢复。
-脚本只接受本仓库的无凭据 origin 地址，并通过 GitHub 查询确认 Private；无法确认就停止。
+脚本只接受本仓库的无凭据 origin 地址；可见性仅作提示（公开仓库同样可用），无法确认时给出警告但不阻断。
 源码必须干净，当前分支必须跟踪 origin；拉取只允许快进，默认要求与上游提交一致，未推送的本地提交
 要先审核推送，或明确使用 `-NoPull`。绝不自动切分支、stash、reset 或合并冲突。
 没有自动选择“最新发布版”：所部署的就是当前跟踪分支拉取后的提交，分支本身应由维护者审核。
@@ -231,4 +231,4 @@ gh repo view Yac836/dsh-usage-report --json isPrivate,visibility,url
 若确认真实凭据曾进入历史、仓库不再是 Private、需要重写历史或轮换生产凭据，
 立即停止整理、提交和推送，报告位置与类别并由所有者决定后续。不得通过删掉当前文件、
 只更新 `.gitignore` 或添加扫描忽略规则来掩盖历史暴露。没有这些阻断项时，逐项复核暂存区，
-再次确认 GitHub Private 后才提交及推送，并记录提交与远端 SHA。
+再次确认 GitHub 可见性与发布意图后才提交及推送，并记录提交与远端 SHA。

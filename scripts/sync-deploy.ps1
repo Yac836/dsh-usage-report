@@ -160,7 +160,7 @@ try {
     if (-not $Rollback) {
         $taskGh = (Get-Command gh -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
         $taskPrivate = Invoke-Quiet $taskGh @('repo', 'view', 'Yac836/dsh-usage-report', '--json', 'isPrivate', '--jq', '.isPrivate') 'Cannot confirm GitHub visibility. Check gh authentication yourself.'
-        if ($taskPrivate -ne 'true') { Stop-Deployment 'GitHub repository is not Private; deployment stopped.' }
+        if ($taskPrivate -ne 'true') { Write-Warning 'Repository is public. Visibility is informational; continuing with the guarded sync.' }
         Assert-CleanRepo
     }
     foreach ($taskForbiddenRoot in @($taskRoot, $DshHome)) {

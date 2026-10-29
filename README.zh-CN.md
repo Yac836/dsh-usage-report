@@ -77,7 +77,7 @@ pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 ```
 
 也可以双击根目录的 `update.cmd`。需要 Windows、PowerShell 7.2+、Node 20+、Git、npm 和已登录的
-GitHub CLI。脚本先确认仓库 Private，按当前分支的 origin 上游执行仅快进拉取，安装锁定的测试依赖、
+GitHub CLI。脚本按当前分支的 origin 上游执行仅快进拉取，安装锁定的测试依赖、
 检查宿主兼容性并运行测试，然后备份及替换插件。运行前结束 DSH 正在执行的任务：默认会短暂重启
 唯一匹配的本机回环 Web 实例；已有浏览器登录继续使用宿主原来的持久凭据。
 
@@ -88,7 +88,7 @@ GitHub CLI。脚本先确认仓库 Private，按当前分支的 origin 上游执
 ### 方式 B —— 已核验来源的 npm 包
 
 仅在确认 npm 包的所有者、来源和版本后使用。GitHub 私有仓库不代表同名 npm 包归自己所有，
-也不能证明该包已发布；本私有 checkout 优先使用上面的路径安装流程。
+也不能证明该包已发布；本仓库优先使用上面的路径安装流程。
 
 ```sh
 dsh plugin add dsh-usage-report
@@ -449,7 +449,7 @@ node --test    # 等价，直接在 checkout 里跑
 只防止误提交，不代表可以删除这些文件。`lib/client.js` 是手写源码，两张 PNG 是有引用的文档素材。
 GitHub Actions 只安装依赖、自检并测试，不执行部署。
 
-提交前扫描所有已获取 Git 历史及工作区，再复核暂存区并重新确认 GitHub 为 Private。
+提交前扫描所有已获取 Git 历史及工作区，再复核暂存区并确认 GitHub 可见性。
 发现真实凭据入历史、仓库不再私有，或需要凭据轮换、历史重写时立即停止并报告。
 
 ## 许可证
