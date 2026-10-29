@@ -113,6 +113,27 @@ unrelated owner, so `dsh plugin add dsh-usage-report` would install someone else
 Install from this repository instead (Option A, or `node scripts/install.mjs`). If a package is ever
 published, this section will name it exactly and say that the route needs `pnpm` on the machine.
 
+### DeepSeek Harness Desktop
+
+Desktop runs the same client half (the loader only accepts `platform: "web"`, which this plugin
+declares), but it keeps its **own profile named `desktop`**. A plugin installed into the `web`
+profile does not appear there.
+
+1. Open Desktop once so it initializes its profile, then **fully quit it**.
+2. Install into that profile:
+
+   ```sh
+   node scripts/install.mjs --profile desktop
+   ```
+
+   If Desktop keeps its home somewhere other than `%DSH_HOME%` (or `~/.dsh`), point at it:
+   `node scripts/install.mjs --dsh <that home> --profile desktop`.
+3. Add the same `insert` row to `profiles/desktop/cordis.patch.yml` (see `examples/`).
+4. Relaunch Desktop.
+
+Desktop ships its own DSH build; if it is older than this manifest's peer range, DSH rejects the
+plugin as incompatible. Check with `node scripts/verify.mjs --dsh <path to Desktop's @deepseek-ai/dsh>`.
+
 ### Compatibility gate
 
 Before installing, DSH evaluates every `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` peer range in the

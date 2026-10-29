@@ -98,6 +98,26 @@ pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 在正式发布之前，请按方式 A、或用 `node scripts/install.mjs` 从本仓库安装。
 将来若发布，本节会写明准确的包名，并说明该路线需要机器上有 `pnpm`。
 
+### DeepSeek Harness Desktop
+
+Desktop 运行的是同一套客户端半（加载器只接受 `platform: "web"`，本插件声明的正是它），
+但它有**自己独立的 `desktop` profile** —— 装进 `web` profile 的插件在那里不会出现。
+
+1. 先打开一次 Desktop 让它初始化 profile，然后**完全退出**。
+2. 装进那个 profile：
+
+   ```sh
+   node scripts/install.mjs --profile desktop
+   ```
+
+   若 Desktop 的 home 不在 `%DSH_HOME%`（或 `~/.dsh`）下，指过去即可：
+   `node scripts/install.mjs --dsh <那个 home> --profile desktop`。
+3. 把同一段 `insert` 加进 `profiles/desktop/cordis.patch.yml`（见 `examples/`）。
+4. 重新启动 Desktop。
+
+Desktop 自带 DSH 构建；若它低于本 manifest 的 peer 范围，DSH 会判定不兼容而拒绝。
+用 `node scripts/verify.mjs --dsh <Desktop 的 @deepseek-ai/dsh 路径>` 检查。
+
 ### 兼容性闸门
 
 安装前，DSH 会把 manifest 里每个 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 的 peer 范围拿去和
