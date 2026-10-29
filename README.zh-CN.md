@@ -48,6 +48,10 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
 
 ### 方式 A —— 路径 insert（不需要 pnpm）· 推荐
 
+仓库已经 clone 下来时，`node scripts/install.mjs` 会替你完成这次复制，并记录安装的 commit
+与清单，之后即可用 `update.cmd` 更新。加 `--check` 只做干跑。
+
+
 1. 把插件目录放进 profile 内，例如 `~/.dsh/profiles/web/plugins/dsh-usage-report/`。
 2. 在 profile 的 patch 文件 `~/.dsh/profiles/web/cordis.patch.yml` 里加一条 `insert`：
 

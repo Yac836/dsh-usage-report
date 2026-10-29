@@ -24,7 +24,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "install:plugin": "node scripts/install.mjs"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.87.1",

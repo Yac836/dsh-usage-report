@@ -58,6 +58,10 @@ no known cost included in the total; a zero placeholder does not mean they were 
 
 ### Option A — path insert (no pnpm needed) · recommended
 
+With this repository cloned, `node scripts/install.mjs` performs that copy for you, records the
+installed commit and writes the manifest `update.cmd` expects. Add `--check` for a dry run.
+
+
 1. Place the plugin directory inside the profile, e.g.
    `~/.dsh/profiles/web/plugins/dsh-usage-report/`.
 2. Add an `insert` row to the profile patch `~/.dsh/profiles/web/cordis.patch.yml`:
