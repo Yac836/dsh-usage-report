@@ -68,6 +68,10 @@ if (!existsSync(dshHome)) fail(`DSH home not found: ${dshHome} (pass --dsh <dir>
 
 const profileDir = join(dshHome, 'profiles', profile)
 if (!existsSync(profileDir)) fail(`profile not found: ${profileDir} (create it in DSH first, or pass --profile)`)
+const patchFile = join(profileDir, 'cordis.patch.yml')
+if (!existsSync(patchFile)) {
+  fail(`no cordis.patch.yml in ${profileDir}; the updater needs it — create the profile in DSH first`)
+}
 const target = plain(join(profileDir, 'plugins', 'dsh-usage-report'))
 if (!inside(profileDir, target)) fail('resolved target escapes the profile directory')
 
