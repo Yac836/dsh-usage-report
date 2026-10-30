@@ -123,19 +123,40 @@ profile does not appear there.
 2. Install into that profile:
 
    ```sh
+   node scripts/install.mjs --profile desktop --check
    node scripts/install.mjs --profile desktop
    ```
 
    If Desktop keeps its home somewhere other than `%DSH_HOME%` (or `~/.dsh`), point at it:
    `node scripts/install.mjs --dsh <that home> --profile desktop`.
+   `--dsh` selects the **data home**, not the Desktop program installation directory.
+   On Windows, the installer detects the running or registered Desktop installation, checks
+   its bundled peers and imports the plugin without starting the app or loading a profile.
+   For a custom program installation, add `--desktop "D:\Apps\DeepSeek Harness"` (or its EXE).
+   Multiple installations require an explicit selection. A real install refuses a running Desktop;
+   `--check` remains read-only and can run while it is open.
 3. Add the same `insert` row to `profiles/desktop/cordis.patch.yml` (see `examples/`).
 4. Relaunch Desktop.
 
-Later updates: `update.cmd -Profile desktop -NoRestart` — quit Desktop first, because it holds
-the port and the guarded restart only serves the `web` profile.
+Later Windows updates (quit Desktop, including its tray process, first):
 
-Desktop ships its own DSH build; if it is older than this manifest's peer range, DSH rejects the
-plugin as incompatible. Check with `node scripts/verify.mjs --dsh <path to Desktop's @deepseek-ai/dsh>`.
+```powershell
+.\update.cmd -Profile desktop -NoRestart
+# Reuse a custom data home and/or program installation on updates and rollback:
+.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+```
+
+The installer prints an update command containing the selected home and installation. Desktop
+updates and rollbacks check for running Desktop processes rather than assuming port 3080 is its
+port. A separate Web profile can remain running. Desktop is never stopped or relaunched automatically.
+
+Desktop ships its own DSH build inside `resources/app.asar`. The Windows checks use its Electron
+Node mode to read that archive and resolve the plugin's peers from that same bundled runtime,
+without extracting/copying the core or falling back to CLI packages under the data home. Check it
+directly with `node scripts/desktop-runtime.mjs .` (append the Desktop installation directory if
+auto-detection is ambiguous). Incompatible peers or a failed import stop the installation/update.
+Automatic Desktop discovery and this guarded updater target Windows; other platforms retain the
+manual path installation procedure.
 
 ### Compatibility gate
 

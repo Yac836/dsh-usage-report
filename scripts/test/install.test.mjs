@@ -18,7 +18,7 @@ function fixture(run) {
   const patch = join(home, 'profiles/web/cordis.patch.yml')
   const target = join(dirname(patch), 'plugins/dsh-usage-report')
   try {
-    for (const file of [...pluginFiles, 'scripts/install.mjs', 'scripts/sync-deploy.mjs', 'scripts/sync-deploy.ps1']) {
+    for (const file of [...pluginFiles, 'scripts/install.mjs', 'scripts/sync-deploy.mjs', 'scripts/sync-deploy.ps1', 'scripts/desktop-runtime.mjs']) {
       mkdirSync(dirname(join(source, file)), { recursive: true })
       copyFileSync(join(project, file), join(source, file))
     }
@@ -52,6 +52,7 @@ test('invalid installer arguments fail without creating an installation or expos
     ['--dsh='], ['--profile='], ['--check=false'], ['--check', '--check'],
     ['--profile', 'web', '--profile', 'other'], ['--dsh', f.home, '--dsh', f.home],
     ['--help', '--unknown'], ['--unknown=SYNTHETIC_PRIVATE_ARGUMENT'],
+    ['--desktop'], ['--desktop='], ['--desktop', '--check'],
   ]) {
     const result = f.invoke(args)
     assert.equal(result.status, 1, JSON.stringify(args))

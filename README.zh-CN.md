@@ -107,19 +107,36 @@ Desktop 运行的是同一套客户端半（加载器只接受 `platform: "web"`
 2. 装进那个 profile：
 
    ```sh
+   node scripts/install.mjs --profile desktop --check
    node scripts/install.mjs --profile desktop
    ```
 
    若 Desktop 的 home 不在 `%DSH_HOME%`（或 `~/.dsh`）下，指过去即可：
    `node scripts/install.mjs --dsh <那个 home> --profile desktop`。
+   `--dsh` 指的是**数据目录**，不是 Desktop 程序的安装目录。
+   Windows 下会自动识别正在运行或已注册的 Desktop 安装，检查其自带依赖并只导入插件，
+   不启动界面或加载 profile。程序装在自定义位置时，可加
+   `--desktop "D:\Apps\DeepSeek Harness"`（也可填 EXE）；多个安装无法唯一确定时必须明确选择。
+   实际安装前必须完全退出 Desktop；`--check` 只读检查可以在它运行时执行。
 3. 把同一段 `insert` 加进 `profiles/desktop/cordis.patch.yml`（见 `examples/`）。
 4. 重新启动 Desktop。
 
-之后的更新：`update.cmd -Profile desktop -NoRestart` —— 先完全退出 Desktop，因为它占着端口，
-而自动重启只支持 `web` profile。
+之后的 Windows 更新，先完全退出 Desktop（包括托盘进程）：
 
-Desktop 自带 DSH 构建；若它低于本 manifest 的 peer 范围，DSH 会判定不兼容而拒绝。
-用 `node scripts/verify.mjs --dsh <Desktop 的 @deepseek-ai/dsh 路径>` 检查。
+```powershell
+.\update.cmd -Profile desktop -NoRestart
+# 如果安装时自定义过数据目录或程序位置，更新和回滚时沿用相同参数：
+.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+```
+
+安装器会输出含实际数据目录和程序位置的更新命令。Desktop 更新、回滚检查进程是否退出，
+不假设它使用 3080 端口；独立的 Web profile 可以继续运行。脚本不会自动关闭或重启 Desktop。
+
+Desktop 自带的核心打包在 `resources/app.asar` 中。Windows 下通过其 Electron Node 模式
+直接读取打包资源并从同一套核心解析插件依赖，无需解包、复制核心，也不会改用数据目录下的 CLI 依赖。
+可运行 `node scripts/desktop-runtime.mjs .` 单独只读检查；自动识别不唯一时，在末尾追加程序安装目录。
+依赖不兼容或插件导入失败都会阻止安装、更新。自动识别和一键更新针对 Windows；其他平台仍按
+手动路径 insert 流程安装。
 
 ### 兼容性闸门
 
