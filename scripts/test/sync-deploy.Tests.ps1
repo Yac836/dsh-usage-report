@@ -46,7 +46,8 @@ try {
     $taskFakeProcess = [pscustomobject]@{ ProcessId = 12345; Name = 'node.exe'; ExecutablePath = $taskNode; CommandLine = ('"{0}" "{1}" web' -f $taskNode, $taskEntry); CreationDate = [DateTime]::UtcNow }
     $taskStopCount = 0
     function Get-NetTCPConnection { [CmdletBinding()]param($State, $LocalPort) return $script:taskFakeListeners }
-    function Get-CimInstance { [CmdletBinding()]param($ClassName, $Filter) return $script:taskFakeProcess }
+    $taskFakeDesktop = @()
+    function Get-CimInstance { [CmdletBinding()]param($ClassName, $Filter) if ($Filter -eq "Name='DeepSeek Harness.exe'") { return $script:taskFakeDesktop }; return $script:taskFakeProcess }
     $taskFakeOwner = $taskSid
     function Invoke-CimMethod { [CmdletBinding()]param($InputObject, $MethodName) return [pscustomobject]@{ ReturnValue = 0; Sid = $script:taskFakeOwner } }
     function Stop-Process { [CmdletBinding()]param($Id) $script:taskStopCount++; $script:taskFakeListeners = @() }
@@ -71,6 +72,13 @@ try {
     $NoRestart = $false
     $Profile = 'desktop'
     Refuses { Get-DefaultWebProcess } 'desktop profile is refused for automatic restart'
+    Refuses { Get-TargetProcess } 'desktop deployment explicitly requires NoRestart'
+    $NoRestart = $true
+    Assert ($null -eq (Get-TargetProcess)) 'a closed Desktop does not conflict with a separate Web listener'
+    $taskFakeDesktop = @([pscustomobject]@{ ProcessId = 45678 })
+    Refuses { Get-TargetProcess } 'running Desktop is refused regardless of its random HTTP port'
+    Assert ($taskStopCount -eq 0) 'Desktop guards never stop an app or the separate Web host'
+    $taskFakeDesktop = @(); $NoRestart = $false
     $Profile = 'web'
     $taskCommand = $taskFakeProcess.CommandLine
     $taskFakeProcess.CommandLine += ' --patch custom.yml'

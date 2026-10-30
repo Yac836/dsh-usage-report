@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { checkDesktop } from './desktop-runtime.mjs'
 
 export const pluginFiles = Object.freeze([
   'package.json', 'LICENSE', 'README.md', 'README.zh-CN.md',
@@ -201,8 +202,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     if (action === 'plan') result = planDeployment(options)
     else if (action === 'inspect') result = inspectInstallation(options)
     else if (action === 'prepare') result = prepareDeployment(options, values['--backup'])
-    else if (action === 'activate') result = await activateDeployment(values['--backup'])
-    else if (action === 'rollback') result = await rollbackDeployment(values['--backup'])
+    else if (action === 'activate' || action === 'rollback') {
+      const { record } = recoveryRecord(values['--backup'])
+      let validate = importPlugin
+      if (record.profile === 'desktop') {
+        requireThat(Boolean(values['--desktop']), 'desktop_runtime_required')
+        validate = target => checkDesktop({ executable: values['--desktop'], plugin: target })
+      }
+      result = action === 'activate' ? await activateDeployment(values['--backup'], validate) : await rollbackDeployment(values['--backup'], validate)
+    }
     else fail('unknown_action')
     console.log(JSON.stringify(result))
   } catch (error) {

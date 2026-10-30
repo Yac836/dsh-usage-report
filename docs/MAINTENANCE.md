@@ -144,6 +144,25 @@ Git 拉取失败会停止更新。维护者在发布代码前仍须单独核实�
 要先审核推送，或明确使用 `-NoPull`。绝不自动切分支、stash、reset 或合并冲突。
 没有自动选择“最新发布版”：所部署的就是当前跟踪分支拉取后的提交，分支本身应由维护者审核。
 
+Desktop 使用 `-Profile desktop -NoRestart`，必须先完全退出应用和托盘进程；脚本不自动停止或
+重启 Desktop。它通过 Desktop 进程检查关闭状态，不占用 Web 的 3080 端口判断，因此独立 Web
+profile 可保持运行。测试后、写入前再次检查 Desktop 进程，发现重新启动就停止并保留备份。
+
+Desktop 程序安装目录与数据目录分开：`-DshHome` / 安装器的 `--dsh` 指含 `profiles` 的数据根，
+`-DesktopPath` / `--desktop` 指程序安装目录或 `DeepSeek Harness.exe`。Windows 自动识别当前
+运行的安装或卸载注册表中的安装；存在多个候选时必须明确选择，不猜测。自定义数据目录更新及
+回滚示例：
+
+```powershell
+.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+pwsh -NoProfile -File .\scripts\sync-deploy.ps1 -Rollback <备份编号> -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+```
+
+Desktop 校验通过它自带的 Electron Node 模式读取 `resources/app.asar`，核对 Desktop/核心版本、
+全部 peer 范围，并从打包核心解析依赖导入插件。只检查导出，不调用 `apply()`、不加载 profile、
+不读取运行凭据；不解包或复制核心文件。检查失败不会降级使用旧 CLI 依赖，也不跳过导入验证。
+更新及回滚激活后的导入失败仍恢复替换前的目录。`-CheckOnly` 可在 Desktop 运行时进行只读校验。
+
 更新前会运行锁定依赖安装、自检和全部测试。测试的 `DSH_HOME`、`TEMP`、`TMP` 放进项目外新建的
 一次性目录，结束后还原环境并清理该目录，不指向真实缓存。安装位置由 `DSH_HOME` 或用户的 `.dsh`
 目录与 `-Profile web` 决定；必须先有完整 `.deployment.json`，旧安装无此记录时人工核验并登记，

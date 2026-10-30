@@ -11,6 +11,7 @@
  *   node scripts/install.mjs                     # detect <DSH_HOME> (~/.dsh), profile "web"
  *   node scripts/install.mjs --dsh <home>        # explicit DSH home
  *   node scripts/install.mjs --profile <name>    # profile name (default: web)
+ *   node scripts/install.mjs --profile desktop --desktop <install dir or exe>
  *   node scripts/install.mjs --check             # dry run, writes nothing
  *
  * Guarantees, matching the updater's rules:
@@ -28,6 +29,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { pluginFiles } from './sync-deploy.mjs'
+import { assertDesktopClosed, checkDesktop, findDesktop } from './desktop-runtime.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const fail = (message) => {
@@ -42,6 +44,7 @@ try {
   const parsed = parseArgs({
     options: {
       dsh: { type: 'string' }, profile: { type: 'string' },
+      desktop: { type: 'string' },
       check: { type: 'boolean' }, help: { type: 'boolean' },
     },
     strict: true, allowPositionals: false, tokens: true,
@@ -59,7 +62,7 @@ try {
   fail('invalid arguments; use --help. No files were written.')
 }
 if (options.help) {
-  console.log('Usage: node scripts/install.mjs [--dsh <home>] [--profile <name>] [--check] [--help]')
+  console.log('Usage: node scripts/install.mjs [--dsh <data home>] [--profile <name>] [--desktop <Desktop install directory or exe>] [--check] [--help]')
   console.log('--check validates installation without writing files. Unknown or repeated options are rejected.')
   process.exit(0)
 }
@@ -88,6 +91,8 @@ const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest(
 const dshHome = plain(options.dsh ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'))
 const profile = options.profile ?? 'web'
 if (!/^[a-zA-Z0-9_-]+$/.test(profile)) fail('invalid --profile')
+if (options.desktop && profile !== 'desktop') fail('--desktop requires --profile desktop')
+if (options.desktop && process.platform !== 'win32') fail('--desktop automatic checks currently require Windows')
 if (!existsSync(dshHome)) fail(`DSH home not found: ${dshHome} (pass --dsh <dir>)`)
 
 const profileDir = join(dshHome, 'profiles', profile)
@@ -124,15 +129,32 @@ if (git(['status', '--porcelain']).length > 0) {
 const source = plain(root)
 const files = {}
 for (const rel of pluginFiles) {
-  const from = join(source, rel)
+  const from = plain(join(source, rel))
   if (!existsSync(from)) fail(`missing source file: ${rel}`)
   files[rel] = sha256(from)
 }
+
+let desktop
+if (profile === 'desktop' && process.platform === 'win32') {
+  try {
+    desktop = checkDesktop({ executable: findDesktop(options.desktop), plugin: source })
+    if (!check) assertDesktopClosed()
+  } catch (error) {
+    const code = /^[a-z_]+$/.test(error?.message || '') ? error.message : 'desktop_check_failed'
+    fail(`${code}. Fully quit Desktop before installing; use --desktop to select its installation. No files were written.`)
+  }
+}
+const quote = value => `'${value.replaceAll("'", "''")}'`
+const updateCommand = `pwsh -NoProfile -File .\\scripts\\sync-deploy.ps1 -DshHome ${quote(dshHome)} -Profile ${profile}`
+  + (desktop ? ` -DesktopPath ${quote(desktop.executable)}` : '')
+  + (profile === 'desktop' ? ' -NoRestart' : '')
 
 if (check) {
   console.log(`dry run — would install ${pluginFiles.length} files from ${source}`)
   console.log(`  into ${target}`)
   console.log(`  at commit ${commit}`)
+  if (desktop) console.log(`Desktop ${desktop.version}: bundled peers and plugin import passed.`)
+  console.log(`Later Windows updates (reuse this data home): ${updateCommand}`)
   process.exit(0)
 }
 
@@ -169,4 +191,5 @@ console.log('  - insert:')
 console.log('      - id: usage-report')
 console.log('        name: ./plugins/dsh-usage-report/lib/index.js')
 console.log('')
-console.log('Then restart DSH. Later updates: update.cmd (or scripts/sync-deploy.ps1).')
+console.log('Then restart DSH. Later Windows updates (reuse this data home):')
+console.log(updateCommand)

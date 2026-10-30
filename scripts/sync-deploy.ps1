@@ -3,6 +3,7 @@
 param(
     [string]$DshHome = $(if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dsh' }),
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Profile = 'web',
+    [string]$DesktopPath,
     [ValidateRange(1, 65535)][int]$Port = 3080,
     [string]$BackupRoot = $(Join-Path ([Environment]::GetFolderPath('UserProfile')) 'project-secrets\dsh-usage-report\deployments'),
     [Parameter(ParameterSetName = 'Deploy')][switch]$NoPull,
@@ -28,6 +29,7 @@ $taskBeforeMarker = $null
 $taskTestDir = $null
 $taskOldEnv = @{}
 $taskSafeFailure = $null
+$taskDesktopExe = $null
 $taskOriginalLocation = Get-Location
 
 function Stop-Deployment([string]$Reason) {
@@ -48,6 +50,7 @@ function Invoke-Quiet([string]$File, [string[]]$Arguments, [string]$Failure) {
 }
 
 function Invoke-Files([string]$Action, [string[]]$Extra = @()) {
+    if ($taskDesktopExe -and $Action -in @('activate', 'rollback')) { $Extra += @('--desktop', $taskDesktopExe) }
     $taskSavedPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
@@ -67,6 +70,27 @@ function Invoke-Files([string]$Action, [string[]]$Extra = @()) {
 function Assert-CleanRepo {
     $taskDirty = Invoke-Quiet $taskGit @('-C', $taskRoot, 'status', '--porcelain=v1', '--untracked-files=all') 'Cannot inspect repository status.'
     if ($taskDirty) { Stop-Deployment 'Repository has local changes. Commit or preserve them before updating; nothing will be discarded.' }
+}
+
+function Assert-DesktopClosed {
+    if (@(Get-CimInstance Win32_Process -Filter "Name='DeepSeek Harness.exe'" -ErrorAction Stop).Count) {
+        Stop-Deployment 'Desktop is still running. Fully quit it (including the tray) before installing, updating or rolling back. No Desktop process will be stopped automatically.'
+    }
+}
+
+function Get-TargetProcess {
+    if ($Profile -ne 'desktop') { return Get-DefaultWebProcess }
+    if (-not $NoRestart) { Stop-Deployment 'Desktop requires -NoRestart. Fully quit and relaunch it yourself.' }
+    Assert-DesktopClosed
+    return $null
+}
+
+function Get-DesktopRuntime([string]$Plugin) {
+    $taskRuntimeArgs = @((Join-Path $PSScriptRoot 'desktop-runtime.mjs'), $Plugin)
+    if ($DesktopPath) { $taskRuntimeArgs += $DesktopPath }
+    elseif ($taskDesktopExe) { $taskRuntimeArgs += $taskDesktopExe }
+    $taskRuntime = Invoke-Quiet $taskNode $taskRuntimeArgs 'Desktop runtime verification failed. Use -DesktopPath with its installation directory or executable; no core package needs to be copied.'
+    return ($taskRuntime | ConvertFrom-Json)
 }
 
 function New-PrivateDirectory([string]$Path) {
@@ -150,6 +174,7 @@ function Start-VerifiedHost($Spec) {
 
 try {
     if (-not $IsWindows) { Stop-Deployment 'This entry point requires Windows and PowerShell 7.2+.' }
+    if ($DesktopPath -and $Profile -ne 'desktop') { Stop-Deployment '-DesktopPath requires -Profile desktop.' }
     $taskNode = (Get-Command node -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     $taskGit = (Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     Set-Location -LiteralPath $taskRoot
@@ -180,6 +205,7 @@ try {
         $taskRecord = Get-Content -LiteralPath (Join-Path $taskBackup 'deployment.json') -Raw | ConvertFrom-Json
         if ([IO.Path]::GetFullPath($taskRecord.dshHome) -ne [IO.Path]::GetFullPath($DshHome) -or $taskRecord.profile -ne $Profile) { Stop-Deployment 'Rollback belongs to another home or profile.' }
         $taskBeforeMarker = (Invoke-Files 'inspect' $taskOptions).markerHash
+        if ($Profile -eq 'desktop') { $taskDesktopExe = (Get-DesktopRuntime (Join-Path $taskBackup 'previous')).executable }
     } else {
         $taskStage = 'sync'
         if (-not $NoPull -and -not $CheckOnly) {
@@ -200,12 +226,19 @@ try {
         $taskOptions += @('--commit', $taskCommit)
         $taskPlan = Invoke-Files 'plan' $taskOptions
         $taskBeforeMarker = $taskPlan.beforeMarkerHash
+        if ($Profile -eq 'desktop') {
+            $taskDesktopRuntime = Get-DesktopRuntime $taskRoot
+            $taskDesktopExe = $taskDesktopRuntime.executable
+            Write-Host "Desktop $($taskDesktopRuntime.version): bundled peers and plugin import passed."
+        }
         if ($CheckOnly) { Write-Host "Checks passed. Source: $($taskCommit.Substring(0, 7)); installed: $($taskPlan.before.commit.Substring(0, 7)). No pull, install, file replacement, or restart performed."; return }
         if ($taskPlan.unchanged) { Write-Host "Plugin files already match source $($taskCommit.Substring(0, 7)); installed record: $($taskPlan.before.commit.Substring(0, 7)). No restart needed."; return }
         $taskStage = 'tests'
-        $taskTestHost = Get-DefaultWebProcess
-        $taskHostPackage = if ($taskTestHost) { $taskTestHost.Package } else { Join-Path $DshHome 'profiles/node_modules/@deepseek-ai/dsh' }
-        if (-not (Test-Path -LiteralPath (Join-Path $taskHostPackage 'package.json') -PathType Leaf)) { Stop-Deployment 'Installed DSH package was not found; compatibility verification cannot be skipped.' }
+        $taskTestHost = Get-TargetProcess
+        if ($Profile -ne 'desktop') {
+            $taskHostPackage = if ($taskTestHost) { $taskTestHost.Package } else { Join-Path $DshHome 'profiles/node_modules/@deepseek-ai/dsh' }
+            if (-not (Test-Path -LiteralPath (Join-Path $taskHostPackage 'package.json') -PathType Leaf)) { Stop-Deployment 'Installed DSH package was not found; compatibility verification cannot be skipped.' }
+        }
         Write-Host 'Installing locked test dependencies and running compatibility checks and tests...'
         $taskNpm = (Get-Command npm.cmd -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
         $taskTestDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) ('codex-temp\dsh-sync-test-' + [guid]::NewGuid().ToString('N'))
@@ -214,7 +247,8 @@ try {
         $env:TEMP = $taskTestDir; $env:TMP = $taskTestDir; $env:DSH_HOME = Join-Path $taskTestDir 'isolated-dsh'
         try {
             $null = Invoke-Quiet $taskNpm @('ci', '--ignore-scripts', '--no-audit', '--no-fund', '--logs-max=0') 'Dependency installation failed; installed plugin was not changed.'
-            $null = Invoke-Quiet $taskNode @('scripts/verify.mjs', '--dsh', $taskHostPackage) 'Compatibility check failed; installed plugin was not changed.'
+            if ($Profile -eq 'desktop') { $null = Get-DesktopRuntime $taskRoot }
+            else { $null = Invoke-Quiet $taskNode @('scripts/verify.mjs', '--dsh', $taskHostPackage) 'Compatibility check failed; installed plugin was not changed.' }
             $null = Invoke-Quiet $taskNpm @('test', '--logs-max=0') 'Tests failed; installed plugin was not changed.'
             $null = Invoke-Quiet (Join-Path $PSHOME 'pwsh.exe') @('-NoProfile', '-File', 'scripts/test/sync-deploy.Tests.ps1') 'Windows deployment guard tests failed; installed plugin was not changed.'
         } finally {
@@ -224,7 +258,7 @@ try {
         if ((Invoke-Quiet $taskGit @('rev-parse', 'HEAD') 'Cannot recheck commit.') -ne $taskCommit) { Stop-Deployment 'Source commit changed during testing.' }
     }
     $taskStage = 'host_preflight'
-    $taskRestart = Get-DefaultWebProcess
+    $taskRestart = Get-TargetProcess
     if ($taskTestHost -and (-not $taskRestart -or $taskRestart.Creation -ne $taskTestHost.Creation -or $taskRestart.Command -ne $taskTestHost.Command)) { Stop-Deployment 'DSH changed during testing. Run the update again against the current host.' }
     if (-not $taskRestart -and -not $NoRestart) { Stop-Deployment 'No verified running host. Start the usual dsh web instance, or use -NoRestart to deploy while it is closed.' }
     if (-not $Rollback) {
@@ -241,13 +275,14 @@ try {
         $taskStopped = $true
     }
     $taskStage = 'activate'
+    if ($Profile -eq 'desktop') { Assert-DesktopClosed }
     $taskResult = Invoke-Files $(if ($Rollback) { 'rollback' } else { 'activate' }) @('--backup', $taskBackup)
     $taskActivated = $true
     if ($taskRestart) { $taskStage = 'restart'; Start-VerifiedHost $taskRestart; $taskStopped = $false }
     Write-Host "Deployed: $($taskResult.commit.Substring(0, 7)). Configuration and session files were preserved."
     if ($taskRestart) { Write-Host "DSH is listening on loopback. Open your existing signed-in browser: http://127.0.0.1:$Port/ (verify the Usage panel and refresh)." }
-    else { Write-Host 'Start DSH normally to load this version.' }
-    if (-not $Rollback) { Write-Host "Rollback command: pwsh -NoProfile -File .\scripts\sync-deploy.ps1 -Rollback $taskId"; Write-Host 'Reuse any custom -DshHome, -Profile, -Port, -BackupRoot and -NoRestart arguments for rollback.' }
+    else { Write-Host 'Start DSH normally to load this version (Desktop: relaunch the desktop app).' }
+    if (-not $Rollback) { Write-Host "Rollback command: pwsh -NoProfile -File .\scripts\sync-deploy.ps1 -Rollback $taskId"; Write-Host 'Reuse any custom -DshHome, -Profile, -DesktopPath, -Port, -BackupRoot and -NoRestart arguments for rollback.' }
 } catch {
     # Raw external errors can include URLs or credential-bearing diagnostics. Do not print them.
     Write-Host "Stopped at stage: $taskStage."

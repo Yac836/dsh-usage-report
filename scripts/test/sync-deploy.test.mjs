@@ -1,8 +1,10 @@
 import { test } from 'node:test'
+import { spawnSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { activateDeployment, planDeployment, pluginFiles, prepareDeployment, rollbackDeployment } from '../sync-deploy.mjs'
 
@@ -11,12 +13,12 @@ const newCommit = '2'.repeat(40)
 const sha = value => createHash('sha256').update(value).digest('hex')
 const json = (file, data) => writeFileSync(file, JSON.stringify(data))
 
-async function fixture(run) {
+async function fixture(run, profile = 'web') {
   const root = mkdtempSync(join(tmpdir(), 'dsh-deploy-test-'))
   const source = join(root, 'repo')
   const dshHome = join(root, 'home')
-  const target = join(dshHome, 'profiles/web/plugins/dsh-usage-report')
-  const patch = join(dshHome, 'profiles/web/cordis.patch.yml')
+  const target = join(dshHome, `profiles/${profile}/plugins/dsh-usage-report`)
+  const patch = join(dshHome, `profiles/${profile}/cordis.patch.yml`)
   const backup = join(root, 'backup')
   for (const dir of [join(source, 'lib'), join(target, 'lib'), backup, join(dshHome, 'sessions')]) mkdirSync(dir, { recursive: true })
   const packageData = { name: 'dsh-usage-report', main: 'lib/index.js', type: 'module' }
@@ -29,15 +31,40 @@ async function fixture(run) {
     writeFileSync(join(target, file), text)
     hashes[file] = sha(Buffer.from(text))
   }
-  json(join(target, '.deployment.json'), { commit: oldCommit, profile: 'web', installedAt: '2026-10-17T00:00:00.000Z', files: hashes })
+  json(join(target, '.deployment.json'), { commit: oldCommit, profile, installedAt: '2026-10-17T00:00:00.000Z', files: hashes })
   writeFileSync(join(source, 'README.md'), 'updated documentation\n')
   writeFileSync(patch, '- insert:\n    - id: usage-report\n      name: ./plugins/dsh-usage-report/lib/index.js\n')
   const session = join(dshHome, 'sessions/retained.txt')
   writeFileSync(session, 'retained session fixture\n')
-  const options = { source, dshHome, profile: 'web', commit: newCommit }
+  const options = { source, dshHome, profile, commit: newCommit }
   try { await run({ root, source, dshHome, target, patch, session, backup, options }) }
   finally { rmSync(root, { recursive: true, force: true }) }
 }
+
+test('Desktop deployment and rollback preserve both profiles and use the selected runtime validator', () => fixture(async f => {
+  const web = join(f.dshHome, 'profiles/web')
+  mkdirSync(web, { recursive: true })
+  writeFileSync(join(web, 'preserved.txt'), 'separate Web profile\n')
+  const patch = readFileSync(f.patch)
+  const validated = []
+  const validate = target => { validated.push(JSON.parse(readFileSync(join(target, '.deployment.json'))).commit) }
+  prepareDeployment(f.options, f.backup)
+  await activateDeployment(f.backup, validate)
+  await rollbackDeployment(f.backup, validate)
+  assert.deepEqual(validated, [newCommit, oldCommit])
+  assert.deepEqual(readFileSync(f.patch), patch)
+  assert.equal(readFileSync(join(web, 'preserved.txt'), 'utf8'), 'separate Web profile\n')
+  assert.equal(JSON.parse(readFileSync(join(f.target, '.deployment.json'))).profile, 'desktop')
+}, 'desktop'))
+
+test('Desktop CLI refuses activation without a runtime before moving installed files', () => fixture(f => {
+  prepareDeployment(f.options, f.backup)
+  const before = readFileSync(join(f.target, '.deployment.json'))
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../sync-deploy.mjs', import.meta.url)), 'activate', '--backup', f.backup], { encoding: 'utf8' })
+  assert.equal(result.status, 1)
+  assert.equal(JSON.parse(result.stderr).code, 'desktop_runtime_required')
+  assert.deepEqual(readFileSync(join(f.target, '.deployment.json')), before)
+}, 'desktop'))
 
 test('deployment copies the selected version, keeps the old code, and preserves configuration and session bytes', () => fixture(async f => {
   const patchBefore = readFileSync(f.patch)
