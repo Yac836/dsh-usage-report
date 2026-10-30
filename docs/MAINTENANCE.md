@@ -33,6 +33,10 @@ Node 要求为 `>=20`，CI 覆盖 20、22、24。`package.json` 没有运行时 
 ## 配置与私密数据边界
 
 使用 [patch 样例](../examples/cordis.patch.example.yml) 合并一条插件配置。
+
+首次安装从 [中文 Desktop 教程](../README.zh-CN.md#deepseek-harness-desktop) 或
+[English walkthrough](../README.md#deepseek-harness-desktop) 开始；包含 Git 克隆、数据目录选择、
+手工注册、界面验收和常见报错处理。安装器复制文件后还需注册条目，更新脚本不会代做这一步。
 配置 schema 声明 `currency`、`cnyPerUsd`、`warmup`、`warmupDelayMs`、`ttlMs`，
 本插件不接收密码、API Key、Cookie 或 Token。
 
@@ -154,9 +158,13 @@ Desktop 程序安装目录与数据目录分开：`-DshHome` / 安装器的 `--d
 回滚示例：
 
 ```powershell
-.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
-pwsh -NoProfile -File .\scripts\sync-deploy.ps1 -Rollback <备份编号> -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -BackupRoot "D:\DSH-backups\usage-report" -NoRestart
+$deploymentId = Read-Host '输入成功更新时输出的备份编号'
+pwsh -NoProfile -File .\scripts\sync-deploy.ps1 -Rollback $deploymentId -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -BackupRoot "D:\DSH-backups\usage-report" -NoRestart
 ```
+
+备份必须与数据目录同卷，且在数据目录和源码目录之外。上例的数据位于 D 盘，因此显式设置
+D 盘的 `-BackupRoot`；安装器输出的更新命令没有替你选择自定义备份位置，需要按此补全。
 
 Desktop 校验通过它自带的 Electron Node 模式读取 `resources/app.asar`，核对 Desktop/核心版本、
 全部 peer 范围，并从打包核心解析依赖导入插件。只检查导出，不调用 `apply()`、不加载 profile、
@@ -165,7 +173,7 @@ Desktop 校验通过它自带的 Electron Node 模式读取 `resources/app.asar`
 
 更新前会运行锁定依赖安装、自检和全部测试。测试的 `DSH_HOME`、`TEMP`、`TMP` 放进项目外新建的
 一次性目录，结束后还原环境并清理该目录，不指向真实缓存。安装位置由 `DSH_HOME` 或用户的 `.dsh`
-目录与 `-Profile web` 决定；必须先有完整 `.deployment.json`，旧安装无此记录时人工核验并登记，
+目录与 `-Profile web` / `desktop` 决定；必须先有完整 `.deployment.json`，旧安装无此记录时人工核验并登记，
 不要伪造记录来跳过保护。
 
 仅替换明确列出的 12 个插件文件与版本记录，不同步整个 checkout、`.git`、`node_modules`、配置、

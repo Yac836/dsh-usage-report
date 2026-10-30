@@ -5,7 +5,7 @@ provider and model, and exposes the result three ways: a `/usage` slash command,
 `GET /api/usage.report` JSON route, and a **Usage** panel in Settings.
 
 [简体中文](README.zh-CN.md) · [Maintenance, deployment and recovery (中文)](docs/MAINTENANCE.md)
-· [Sanitized profile example](examples/cordis.patch.example.yml)
+· [Sanitized profile example](examples/cordis.patch.example.yml) · [Desktop installation](#deepseek-harness-desktop)
 
 This is an in-process DSH plugin, not a standalone server. It has no build step or
 separate start command. Provider authentication stays with the host; this plugin
@@ -56,6 +56,29 @@ no known cost included in the total; a zero placeholder does not mean they were 
 
 ## Install
 
+**Windows Desktop users: follow the [Desktop walkthrough](#deepseek-harness-desktop) below.**
+`web` and `desktop` are separate profiles. Installation without a profile argument, and double-clicking
+`update.cmd`, default to `web`.
+
+### Prerequisites and checkout
+
+- First installation needs Git, Node.js 20+ and an initialized DeepSeek Harness installation.
+- The Windows updater additionally needs PowerShell 7.2+ (`pwsh`) and npm, which ships with Node.js.
+- Use `git clone`: the installer records a Git commit, so GitHub's ZIP download is not suitable.
+- First installation needs no `npm install`, GitHub CLI/login, or API key in this checkout.
+
+Open PowerShell or a terminal in the directory where you want to keep the source:
+
+```sh
+git clone https://github.com/Yac836/dsh-usage-report.git
+cd dsh-usage-report
+git --version
+node --version
+```
+
+Run all subsequent `node scripts/...` and `.\update.cmd` commands from this checkout. Keep it for
+future updates; do not copy the whole repository into Desktop's program or profile directory.
+
 ### Option A — path insert (no pnpm needed) · recommended
 
 With this repository cloned, `node scripts/install.mjs` performs that copy for you, records the
@@ -63,8 +86,15 @@ installed commit and writes the manifest `update.cmd` expects. Add `--check` for
 or `--help` for usage. Unknown/repeated options and missing values are rejected before any writes.
 
 
-1. Place the plugin directory inside the profile, e.g.
-   `~/.dsh/profiles/web/plugins/dsh-usage-report/`.
+1. Initialize the existing Web host's `web` profile, then run from this checkout:
+
+   ```sh
+   node scripts/install.mjs --profile web --check
+   node scripts/install.mjs --profile web
+   ```
+
+   Files go into `<DSH_HOME>/profiles/web/plugins/dsh-usage-report/` (home defaults to `~/.dsh`).
+   For a custom data home, add `--dsh "your actual data directory"` to both commands.
 2. Add an `insert` row to the profile patch `~/.dsh/profiles/web/cordis.patch.yml`:
 
    ```yaml
@@ -81,12 +111,13 @@ Notes on the path form:
   patch loader. An `id`-targeted row does **not** perform that rewrite, so path-based loading
   only works through `insert`.
 - A relative path resolves against the directory containing the patch file.
-- `@deepseek-ai/*`, `@earendil-works/pi-ai` and `zod` resolve upward to the shared
-  `~/.dsh/profiles/node_modules` tree, so no dependency installation is required.
+- Runtime peers are supplied by the host. Older CLI layouts can use the shared
+  `~/.dsh/profiles/node_modules` tree; Desktop uses its bundled core. Do not install dependencies
+  separately inside the copied plugin directory.
 - Adding a new `insert` row is **not** hot-applied the way editing an existing row's `config`
   is. Restart DSH after adding it.
 
-### Windows: update an existing local installation
+### Windows: update an existing Web profile installation
 
 After the path installation has a `.deployment.json` commit/file-hash record, run from the checkout:
 
@@ -115,48 +146,112 @@ published, this section will name it exactly and say that the route needs `pnpm`
 
 ### DeepSeek Harness Desktop
 
-Desktop runs the same client half (the loader only accepts `platform: "web"`, which this plugin
-declares), but it keeps its **own profile named `desktop`**. A plugin installed into the `web`
-profile does not appear there.
+This walkthrough was verified end to end on **Windows with Desktop 0.2.1-rc.3 on 2026-10-30**,
+including the Usage panel and its Refresh button. Other versions must pass the compatibility checks.
+Automatic discovery and the guarded updater target Windows; manual path installation remains available
+on other platforms, whose Desktop UI has not been verified here.
 
-1. Open Desktop once so it initializes its profile, then **fully quit it**.
-2. Install into that profile:
+Distinguish these directories first:
 
-   ```sh
-   node scripts/install.mjs --profile desktop --check
-   node scripts/install.mjs --profile desktop
-   ```
+| Directory | Contents | Selection |
+|---|---|---|
+| Source checkout | This repository and its installation/update scripts | Run the commands here |
+| Desktop program installation | `DeepSeek Harness.exe` and bundled core | Usually detected; override with `--desktop` / `-DesktopPath` |
+| DSH data home | `profiles`, sessions and user data; defaults to `%USERPROFILE%\.dsh`, or `DSH_HOME` | `--dsh` / `-DshHome`; independent of the program installation |
 
-   If Desktop keeps its home somewhere other than `%DSH_HOME%` (or `~/.dsh`), point at it:
-   `node scripts/install.mjs --dsh <that home> --profile desktop`.
-   `--dsh` selects the **data home**, not the Desktop program installation directory.
-   On Windows, the installer detects the running or registered Desktop installation, checks
-   its bundled peers and imports the plugin without starting the app or loading a profile.
-   For a custom program installation, add `--desktop "D:\Apps\DeepSeek Harness"` (or its EXE).
-   Multiple installations require an explicit selection. A real install refuses a running Desktop;
-   `--check` remains read-only and can run while it is open.
-3. Add the same `insert` row to `profiles/desktop/cordis.patch.yml` (see `examples/`).
-4. Relaunch Desktop.
+Desktop uses its own `desktop` profile: installing into `web` does not enable it in Desktop.
+There is no need to find, extract, or copy its core files.
 
-Later Windows updates (quit Desktop, including its tray process, first):
+**1. Initialize the profile and quit Desktop.** Open Desktop normally once, then fully quit it,
+including its tray process. Closing only the window may leave it running. Use the source checkout
+for the commands below.
+
+**2. Select the data home, check, then install.** In PowerShell:
 
 ```powershell
-.\update.cmd -Profile desktop -NoRestart
-# Reuse a custom data home and/or program installation on updates and rollback:
-.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+$dshData = if ([string]::IsNullOrWhiteSpace($env:DSH_HOME)) { Join-Path $env:USERPROFILE ".dsh" } else { $env:DSH_HOME }
+Test-Path (Join-Path $dshData "profiles\desktop\cordis.patch.yml")
+node scripts/install.mjs --dsh "$dshData" --profile desktop --check
+node scripts/install.mjs --dsh "$dshData" --profile desktop
 ```
 
-The installer prints an update command containing the selected home and installation. Desktop
-updates and rollbacks check for running Desktop processes rather than assuming port 3080 is its
-port. A separate Web profile can remain running. Desktop is never stopped or relaunched automatically.
+`Test-Path` must return `True`. Otherwise find the actual Desktop data home; do not create an empty
+profile to bypass the check. For a custom data home, set `$dshData` to its actual path first, for example
+`$dshData = "D:\DSH-data"`. If the program installation cannot be detected uniquely, append
+`--desktop "D:\Apps\DeepSeek Harness"` (your installation directory or EXE) to both `node` commands.
+Do not proceed after a failed check. `--check` is read-only and can also run while Desktop is open.
 
-Desktop ships its own DSH build inside `resources/app.asar`. The Windows checks use its Electron
-Node mode to read that archive and resolve the plugin's peers from that same bundled runtime,
-without extracting/copying the core or falling back to CLI packages under the data home. Check it
-directly with `node scripts/desktop-runtime.mjs .` (append the Desktop installation directory if
-auto-detection is ambiguous). Incompatible peers or a failed import stop the installation/update.
-Automatic Desktop discovery and this guarded updater target Windows; other platforms retain the
-manual path installation procedure.
+The installer copies the plugin and writes `.deployment.json`. **It does not enable the plugin or
+edit your profile configuration.**
+
+**3. Register the plugin.** Back up the original configuration outside this repository in a location
+only you can access, then open the configuration in the selected data home:
+
+```powershell
+notepad (Join-Path $dshData "profiles\desktop\cordis.patch.yml")
+```
+
+Append this entry to the **top-level list** and save. Preserve all existing entries; do not nest it
+inside another entry's `config`. If the file contains only the empty list `[]`, replace that empty list
+with the block below. Do not add a duplicate if this plugin is already registered.
+
+```yaml
+- insert:
+    - id: usage-report
+      name: ./plugins/dsh-usage-report/lib/index.js
+      config:
+        currency: USD
+        warmup: true
+        warmupDelayMs: 2000
+        ttlMs: 30000
+```
+
+**4. Relaunch and verify.** Open **Settings → Usage** and wait for the first calculation. Check the
+provider/model table, summary cards, heatmap and data timestamp. Click **Refresh** and confirm that
+the timestamp advances without an error. Empty statistics are normal when no sessions have reported
+usage. Costs are estimates, not invoices.
+
+**Later updates.** Fully quit Desktop. From the checkout, run the following (set `$dshData` again as
+in step 2 if using a new PowerShell session):
+
+```powershell
+.\update.cmd -DshHome "$dshData" -Profile desktop -NoRestart
+```
+
+Double-clicking `update.cmd` targets `web`; Desktop needs `-Profile desktop -NoRestart`. The installer
+also prints an update command with the selected data home and program installation. Keep those
+arguments. When upgrading from an older script, first run `git pull --ff-only`, then invoke the
+Desktop updater. Preserve local changes if the pull refuses to proceed.
+
+Backups must be on the **same volume as the data home**, outside both the checkout and the data home.
+For example, with data on D: (substitute your actual paths):
+
+```powershell
+.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -BackupRoot "D:\DSH-backups\usage-report" -NoRestart
+```
+
+The installer's printed command does not select a custom backup location; add `-BackupRoot` when
+needed. A separate Web profile can remain running. The updater never quits or relaunches Desktop;
+reopen it manually when finished. Keep backups and error codes on failure. To roll back code, use
+the printed `-Rollback` command with the same home, profile, program path, backup root and
+`-NoRestart` arguments. Rollback preserves profile configuration.
+
+Troubleshooting:
+
+| Message or symptom | Action |
+|---|---|
+| `node`, `git`, or `pwsh` not found | Install the prerequisites and reopen the terminal; only the Windows updater needs `pwsh` |
+| `desktop_still_running` | Quit Desktop and its tray process before writes; read-only `--check` can run while it is open |
+| `desktop_executable_not_found` / `desktop_installation_ambiguous` | Set `--desktop` or `-DesktopPath` to the program installation, not the data home |
+| `desktop_incompatible_peer` / `desktop_node_hooks_unavailable` | Use a compatible Desktop release and repeat the check; do not substitute an old CLI core |
+| Dirty checkout | Preserve and resolve your edits; do not discard files with `reset --hard` |
+| `target already exists` | Use the updater; if `.deployment.json` is missing, inspect the old installation rather than deleting it or fabricating a marker |
+| Plugin files exist, but Usage is missing | Check the `desktop` profile registration and YAML indentation, then fully restart Desktop |
+| Backup volume mismatch | Set a private `-BackupRoot` on the data volume, outside the data home and checkout |
+
+To check the bundled runtime/import alone, run `node scripts/desktop-runtime.mjs .`; append the
+program installation directory if needed. Report versions and error codes, without sharing complete
+profiles, credentials, session logs or unsanitized screenshots.
 
 ### Compatibility gate
 

@@ -4,7 +4,7 @@
 `/usage` 斜杠命令、`GET /api/usage.report` JSON 路由、设置页的「用量」面板。
 
 [English](README.md) · [维护、部署与恢复](docs/MAINTENANCE.md)
-· [脱敏配置样例](examples/cordis.patch.example.yml)
+· [脱敏配置样例](examples/cordis.patch.example.yml) · [Desktop 安装教程](#deepseek-harness-desktop)
 
 这是运行在 DSH 进程中的插件，没有独立启动命令或构建步骤。供应商鉴权由宿主负责，
 本插件不接收 API Key，也不会自动读取 `.env`；[`.env.example`](.env.example)
@@ -46,6 +46,28 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
 
 ## 安装
 
+**Windows Desktop 用户请按下方 [Desktop 安装教程](#deepseek-harness-desktop) 操作。**
+`web` 与 `desktop` 是不同的 profile；不带参数的安装和双击 `update.cmd` 默认使用 `web`。
+
+### 准备工具并获取源码
+
+- 首次安装需要 Git、Node.js 20 或更新版本，以及已经启动过一次的 DeepSeek Harness。
+- Windows 一键更新额外需要 PowerShell 7.2+（命令为 `pwsh`）和 Node.js 附带的 npm。
+- 安装器依赖 Git 提交记录，请用 `git clone`；GitHub 的 ZIP 下载不适用于这个安装器。
+- 首次安装无需在源码目录执行 `npm install`，无需 GitHub CLI、GitHub 登录或填写 API Key。
+
+在准备保存源码的文件夹中打开 PowerShell 或终端，执行：
+
+```sh
+git clone https://github.com/Yac836/dsh-usage-report.git
+cd dsh-usage-report
+git --version
+node --version
+```
+
+后续所有 `node scripts/...`、`.\update.cmd` 命令都在这个源码目录运行。保留该目录供以后拉取更新，
+不要把整个仓库复制进 Desktop 程序目录或 profile。
+
 ### 方式 A —— 路径 insert（不需要 pnpm）· 推荐
 
 仓库已经 clone 下来时，`node scripts/install.mjs` 会替你完成这次复制，并记录安装的 commit
@@ -53,7 +75,15 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
 未知或重复参数、缺少参数值都会在写入文件前报错。
 
 
-1. 把插件目录放进 profile 内，例如 `~/.dsh/profiles/web/plugins/dsh-usage-report/`。
+1. 确认现有 Web 宿主已初始化 `web` profile，在源码目录执行：
+
+   ```sh
+   node scripts/install.mjs --profile web --check
+   node scripts/install.mjs --profile web
+   ```
+
+   插件将复制到 `<DSH_HOME>/profiles/web/plugins/dsh-usage-report/`（默认 home 为 `~/.dsh`）。
+   自定义数据目录时，两条命令都加 `--dsh "实际数据目录"`。
 2. 在 profile 的 patch 文件 `~/.dsh/profiles/web/cordis.patch.yml` 里加一条 `insert`：
 
    ```yaml
@@ -69,11 +99,11 @@ consumer reports spend"）。因此「我总共花了多少」在原生的 DSH �
 - **`insert`** 行里，看起来像路径的 `name` 会被 patch 解析自动转成 `file://` URL；
   **`id` 定向行不做这个转换**，因此「用路径加载」只能走 `insert`。
 - 相对路径以**该 patch 文件所在目录**为基准。
-- `@deepseek-ai/*`、`@earendil-works/pi-ai` 与 `zod` 会向上解析到共享的
-  `~/.dsh/profiles/node_modules` 树，因此无需安装任何依赖。
+- 运行依赖由宿主提供。旧 CLI 布局可能使用共享的 `~/.dsh/profiles/node_modules` 树；
+  Desktop 使用自带核心，不要在复制后的插件目录内另行安装依赖。
 - 新增 `insert` 行**不像**修改已有条目的 `config` 那样被热应用，加完要重启 DSH。
 
-### Windows：更新本机已安装的插件
+### Windows：更新 Web profile 已安装的插件
 
 首次按上面的路径方式安装、并有 `.deployment.json` 版本和文件哈希记录后，在源码仓库中运行：
 
@@ -100,43 +130,101 @@ pwsh -NoProfile -File .\scripts\sync-deploy.ps1
 
 ### DeepSeek Harness Desktop
 
-Desktop 运行的是同一套客户端半（加载器只接受 `platform: "web"`，本插件声明的正是它），
-但它有**自己独立的 `desktop` profile** —— 装进 `web` profile 的插件在那里不会出现。
+以下流程已于 **2026-10-30 在 Windows、Desktop 0.2.1-rc.3 上完成实机安装和界面刷新验证**。
+其他版本仍以安装器的兼容性检查结果为准。自动识别和一键更新针对 Windows；其他平台使用
+上方手动路径 insert 流程，本文不代表已做过其他平台的 Desktop 实机验证。
 
-1. 先打开一次 Desktop 让它初始化 profile，然后**完全退出**。
-2. 装进那个 profile：
+先区分三个位置：
 
-   ```sh
-   node scripts/install.mjs --profile desktop --check
-   node scripts/install.mjs --profile desktop
-   ```
+| 位置 | 含义 | 如何选择 |
+|---|---|---|
+| 源码目录 | 刚才 `git clone` 得到的仓库，保存安装与更新脚本 | 在此运行本教程命令 |
+| Desktop 程序目录 | 包含 `DeepSeek Harness.exe` 的安装位置 | 通常自动识别；需要时用 `--desktop` / `-DesktopPath` |
+| DSH 数据目录 | 包含 `profiles`、会话等用户数据，默认 `%USERPROFILE%\.dsh`，可由 `DSH_HOME` 指定 | 用 `--dsh` / `-DshHome`；与程序目录分开 |
 
-   若 Desktop 的 home 不在 `%DSH_HOME%`（或 `~/.dsh`）下，指过去即可：
-   `node scripts/install.mjs --dsh <那个 home> --profile desktop`。
-   `--dsh` 指的是**数据目录**，不是 Desktop 程序的安装目录。
-   Windows 下会自动识别正在运行或已注册的 Desktop 安装，检查其自带依赖并只导入插件，
-   不启动界面或加载 profile。程序装在自定义位置时，可加
-   `--desktop "D:\Apps\DeepSeek Harness"`（也可填 EXE）；多个安装无法唯一确定时必须明确选择。
-   实际安装前必须完全退出 Desktop；`--check` 只读检查可以在它运行时执行。
-3. 把同一段 `insert` 加进 `profiles/desktop/cordis.patch.yml`（见 `examples/`）。
-4. 重新启动 Desktop。
+Desktop 使用独立的 `desktop` profile。装进 `web` profile 的插件不会因此出现在 Desktop。
+无需寻找、解包或复制 Desktop 自带的核心文件。
 
-之后的 Windows 更新，先完全退出 Desktop（包括托盘进程）：
+**1. 初始化 profile 并退出 Desktop。** 先正常打开一次 Desktop，然后使用退出菜单完全退出，
+包括托盘进程。关掉窗口后如果仍留在托盘，安装器会停止。下面的命令在刚才克隆的源码目录中执行。
+
+**2. 确认数据目录，先检查再安装。** PowerShell 中执行：
 
 ```powershell
-.\update.cmd -Profile desktop -NoRestart
-# 如果安装时自定义过数据目录或程序位置，更新和回滚时沿用相同参数：
-.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -NoRestart
+$dshData = if ([string]::IsNullOrWhiteSpace($env:DSH_HOME)) { Join-Path $env:USERPROFILE ".dsh" } else { $env:DSH_HOME }
+Test-Path (Join-Path $dshData "profiles\desktop\cordis.patch.yml")
+node scripts/install.mjs --dsh "$dshData" --profile desktop --check
+node scripts/install.mjs --dsh "$dshData" --profile desktop
 ```
 
-安装器会输出含实际数据目录和程序位置的更新命令。Desktop 更新、回滚检查进程是否退出，
-不假设它使用 3080 端口；独立的 Web profile 可以继续运行。脚本不会自动关闭或重启 Desktop。
+`Test-Path` 应返回 `True`；若不是，先核对 Desktop 实际使用的数据目录，不要新建空配置来绕过检查。
+若使用自定义数据目录，先把 `$dshData` 改成真实路径，例如 `$dshData = "D:\DSH-data"`。
+程序安装位置不能自动确定时，在上面两条 `node` 命令末尾都加上
+`--desktop "D:\Apps\DeepSeek Harness"`（填自己的安装目录或 EXE）。检查失败时不要继续安装。
 
-Desktop 自带的核心打包在 `resources/app.asar` 中。Windows 下通过其 Electron Node 模式
-直接读取打包资源并从同一套核心解析插件依赖，无需解包、复制核心，也不会改用数据目录下的 CLI 依赖。
-可运行 `node scripts/desktop-runtime.mjs .` 单独只读检查；自动识别不唯一时，在末尾追加程序安装目录。
-依赖不兼容或插件导入失败都会阻止安装、更新。自动识别和一键更新针对 Windows；其他平台仍按
-手动路径 insert 流程安装。
+安装器只复制插件文件并写入 `.deployment.json`，**不会自动启用插件或修改 profile 配置**。
+
+**3. 在 Desktop 配置中注册插件。** 在项目目录外、仅自己可访问的位置备份原配置文件；
+然后打开当前数据目录下的配置：
+
+```powershell
+notepad (Join-Path $dshData "profiles\desktop\cordis.patch.yml")
+```
+
+在文件的**顶层列表末尾**追加以下内容并保存，不要替换其他现有配置，也不要缩进到某个 `config` 里。
+如果文件原来仅包含空列表 `[]`，用下面这段列表替换 `[]`；已存在相同插件条目时不要重复添加。
+
+```yaml
+- insert:
+    - id: usage-report
+      name: ./plugins/dsh-usage-report/lib/index.js
+      config:
+        currency: USD
+        warmup: true
+        warmupDelayMs: 2000
+        ttlMs: 30000
+```
+
+**4. 重新启动 Desktop 并验收。** 打开“设置 → 用量”，等待首次统计完成。应该看到供应商/模型表、
+汇总卡片、热力图和数据时间；点击“刷新”，确认时间推进且没有刷新失败提示。没有已上报用量的会话时，
+显示空统计属于正常情况；金额是估算，不是供应商账单。没有“用量”入口时先按下方排查，不要修改核心文件。
+
+**以后更新。** 完全退出 Desktop，在源码目录运行；新开 PowerShell 后先按第 2 步重新设置 `$dshData`：
+
+```powershell
+.\update.cmd -DshHome "$dshData" -Profile desktop -NoRestart
+```
+
+直接双击 `update.cmd` 默认更新 `web`，Desktop 必须带上 `-Profile desktop -NoRestart`。
+安装器也会输出带数据目录和程序位置的更新命令，保存并沿用这些参数。若源码仍是旧版脚本，可先
+执行 `git pull --ff-only`，再使用上述 Desktop 更新命令；拉取遇到本地修改或分支冲突时先保留现场。
+
+数据目录在 D 盘等其他卷时，更新备份也必须位于**同一卷**，并在源码及数据目录之外：
+
+```powershell
+.\update.cmd -DshHome "D:\DSH-data" -Profile desktop -DesktopPath "D:\Apps\DeepSeek Harness" -BackupRoot "D:\DSH-backups\usage-report" -NoRestart
+```
+
+安装器输出的命令不自动选择自定义备份位置；此情况要自行补上 `-BackupRoot`。独立 Web profile 可以
+继续运行；脚本不自动关闭或重启 Desktop。更新完成后手动重开 Desktop。更新失败时保留备份和错误码；
+需要代码回滚时，复制成功更新输出的 `-Rollback` 命令，并沿用 `-DshHome`、`-Profile desktop`、
+`-DesktopPath`、`-BackupRoot`、`-NoRestart`；回滚不恢复或覆盖 profile 配置。
+
+常见问题：
+
+| 提示或现象 | 处理 |
+|---|---|
+| 找不到 `node`、`git` 或 `pwsh` | 安装相应前置工具并重新打开终端；首次安装不要求 `pwsh`，一键更新需要 PowerShell 7.2+ |
+| `desktop_still_running` | 完全退出应用和托盘进程，再执行安装/更新；只读 `--check` 可在运行时执行 |
+| `desktop_executable_not_found` / `desktop_installation_ambiguous` | 明确传入 `--desktop` 或更新时的 `-DesktopPath`，不要把程序位置填成数据目录 |
+| `desktop_incompatible_peer` / `desktop_node_hooks_unavailable` | 当前 Desktop 核心不满足检查；保留错误码，使用兼容版本后重新检查，不复制旧 CLI 核心绕过 |
+| `working tree is dirty` / 源码有本地修改 | 保留并处理自己的修改，恢复干净工作区；不要用 `reset --hard` 丢弃文件 |
+| `target already exists` | 已有安装用更新脚本；若缺 `.deployment.json`，先人工核验旧安装，不删除目录或伪造记录 |
+| 有文件但没有“用量”入口 | 确认改的是 `desktop` profile、注册条目存在、YAML 缩进正确，并已完全重启 Desktop |
+| 备份卷不匹配 | 给 `-BackupRoot` 指定与数据目录同卷、且不在源码和数据目录内的私密备份位置 |
+
+单独检查 Desktop 自带核心及插件导入：`node scripts/desktop-runtime.mjs .`，需要时在末尾追加程序安装目录。
+反馈问题只提供版本和错误码，勿粘贴完整配置、凭据、会话日志或未脱敏截图。
 
 ### 兼容性闸门
 
