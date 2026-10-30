@@ -115,6 +115,9 @@ Desktop 运行的是同一套客户端半（加载器只接受 `platform: "web"`
 3. 把同一段 `insert` 加进 `profiles/desktop/cordis.patch.yml`（见 `examples/`）。
 4. 重新启动 Desktop。
 
+之后的更新：`update.cmd -Profile desktop -NoRestart` —— 先完全退出 Desktop，因为它占着端口，
+而自动重启只支持 `web` profile。
+
 Desktop 自带 DSH 构建；若它低于本 manifest 的 peer 范围，DSH 会判定不兼容而拒绝。
 用 `node scripts/verify.mjs --dsh <Desktop 的 @deepseek-ai/dsh 路径>` 检查。
 

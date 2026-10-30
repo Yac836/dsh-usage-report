@@ -131,6 +131,9 @@ profile does not appear there.
 3. Add the same `insert` row to `profiles/desktop/cordis.patch.yml` (see `examples/`).
 4. Relaunch Desktop.
 
+Later updates: `update.cmd -Profile desktop -NoRestart` — quit Desktop first, because it holds
+the port and the guarded restart only serves the `web` profile.
+
 Desktop ships its own DSH build; if it is older than this manifest's peer range, DSH rejects the
 plugin as incompatible. Check with `node scripts/verify.mjs --dsh <path to Desktop's @deepseek-ai/dsh>`.
 
